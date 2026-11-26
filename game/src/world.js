@@ -7,7 +7,10 @@ import {
   RING_COUNT, RING_RADIUS, ZONE_COUNT, ZONE_RADIUS, CRATES, RUNWAY,
   MISSION_Z, SCORE_RING, SCORE_STREAK, SCORE_ZONE, SCORE_LAND_BASE,
   SCORE_LAND_CENTER, SCORE_LAND_SMOOTH, LAND_MAX_VS, LAND_MAX_SPEED,
-  CROSSWIND,
+  CROSSWIND, SCORE_RING_PRECISION, RING_PRECISION_DIST, SCORE_ZONE_STREAK,
+  SCORE_PERFECT_RINGS, SCORE_PERFECT_ZONES, SCORE_TIME_RINGS,
+  SCORE_TIME_ZONES, SCORE_TIME_LAND, TIME_PAR_RINGS, TIME_PAR_ZONES,
+  TIME_PAR_LAND, SCORE_GREASED, LAND_GREASED_VS,
 } from './config.js';
 import { createRandom, makeNoise } from './random.js';
 
@@ -32,15 +35,25 @@ function buildCourse(rand) {
   let alt = 150;
   for (let i = 0; i < RING_COUNT; i += 1) {
     const z = 350 + i * 240;
-    x = clamp(x + (rand() * 2 - 1) * 95, -170, 170);
-    alt = clamp(alt + (rand() * 2 - 1) * 45, 80, 260);
+    // Steps stay inside what the plane can reach from the last ring
+    // (lateral ~87 m and climb ~95 m between rings), so every ring is
+    // hittable by a well-flown run — the challenge is precision, not luck.
+    x = clamp(x + (rand() * 2 - 1) * 70, -170, 170);
+    alt = clamp(alt + (rand() * 2 - 1) * 35, 80, 260);
     rings.push({ z, x, alt, r: RING_RADIUS, hit: false, passed: false });
   }
   const zones = [];
-  let zx = 0;
+  // The first zone sits near where the ring run ended, so the drop run
+  // starts lined up — the plane has 350 m to descend and settle, and a
+  // first zone 130 m sideways would be unhittable before its release point.
+  let zx = clamp(rings[RING_COUNT - 1].x + (rand() * 2 - 1) * 40, -150, 150);
   for (let i = 0; i < ZONE_COUNT; i += 1) {
-    zx = clamp(zx + (rand() * 2 - 1) * 110, -150, 150);
-    zones.push({ z: 3300 + i * 450, x: zx, r: ZONE_RADIUS, hit: false });
+    if (i > 0) zx = clamp(zx + (rand() * 2 - 1) * 110, -150, 150);
+    // First zone sits 600 m past the ring run's end: the plane leaves the
+    // rings high and fast, and the release point for a drop sits ~250 m
+    // ahead of its zone — it needs that room to descend to drop altitude
+    // before the first release point, or the window passes before it.
+    zones.push({ z: 3700 + i * 420, x: zx, r: ZONE_RADIUS, hit: false, passed: false });
   }
   return { rings, zones };
 }
@@ -51,13 +64,36 @@ export function createWorld(rand) {
   const course = buildCourse(rand);
   // Scenery: trees and houses sprinkled beside the track, clouds above it.
   const trees = [];
-  for (let i = 0; i < 160; i += 1) {
-    trees.push({ z: 120 + rand() * (TRACK_LENGTH - 240), x: (rand() < 0.5 ? -1 : 1) * (60 + rand() * 260), s: 0.7 + rand() * 0.9 });
+  for (let i = 0; i < 130; i += 1) {
+    trees.push({ z: 120 + rand() * (TRACK_LENGTH - 240), x: (rand() < 0.5 ? -1 : 1) * (60 + rand() * 260), s: 0.7 + rand() * 0.9, round: rand() < 0.3 });
+  }
+  // Woods: clusters of round-canopy trees, so the ground reads as
+  // farmland with copses rather than evenly sprinkled triangles.
+  for (let c = 0; c < 7; c += 1) {
+    const cz = 300 + rand() * (TRACK_LENGTH - 900);
+    const cx = (rand() < 0.5 ? -1 : 1) * (90 + rand() * 220);
+    const n = 6 + Math.floor(rand() * 7);
+    for (let i = 0; i < n; i += 1) {
+      trees.push({ z: cz + (rand() * 2 - 1) * 60, x: cx + (rand() * 2 - 1) * 55, s: 0.7 + rand() * 1.0, round: true });
+    }
   }
   const clouds = [];
   for (let i = 0; i < 26; i += 1) {
-    clouds.push({ z: rand() * TRACK_LENGTH, x: (rand() * 2 - 1) * 500, y: 300 + rand() * 160, s: 0.8 + rand() * 1.6 });
+    clouds.push({ z: rand() * TRACK_LENGTH, x: (rand() * 2 - 1) * 500, y: 300 + rand() * 160, s: 1.1 + rand() * 2.0 });
   }
+  // A winding river crosses the farmland (deterministic path from the
+  // seeded phases, so the same seed always draws the same river).
+  const river = { p1: rand() * 6.283, p2: rand() * 6.283 };
+  function riverX(z) {
+    return 150 * Math.sin(z * 0.0016 + river.p1) + 60 * Math.sin(z * 0.0042 + river.p2);
+  }
+  // A small village beside the runway, and the airfield itself.
+  const houses = [];
+  for (let i = 0; i < 8; i += 1) {
+    houses.push({ z: 5660 + i * 34 + rand() * 18, x: (rand() < 0.5 ? -1 : 1) * (42 + rand() * 85), s: 0.8 + rand() * 0.6, tone: Math.floor(rand() * 3) });
+  }
+  const windsock = { z: 6060, x: -30 };
+  const hangar = { z: 6180, x: 55, s: 1 };
 
   // Ground height at distance z: rolling hills that flatten into the
   // runway approach, then dead flat along the strip itself.
@@ -88,9 +124,13 @@ export function createWorld(rand) {
       streak: 0,
       ringsHit: 0,
       zonesHit: 0,
+      zoneStreak: 0, // consecutive zones hit without flying past one
       crates: CRATES,
       dropCooldown: 0, // seconds until another crate may leave the bay
       time: 0,
+      missionStart: 0, // state.time when the current mission began
+      missionTimes: {}, // mission -> seconds it took
+      scoreParts: { rings: 0, zones: 0, landing: 0, bonus: 0 },
       over: false,
       landed: false,
       crashReason: '',
@@ -106,14 +146,14 @@ export function createWorld(rand) {
   function reset() {
     Object.assign(state, freshState());
     for (const r of course.rings) { r.hit = false; r.passed = false; }
-    for (const zn of course.zones) zn.hit = false;
+    for (const zn of course.zones) { zn.hit = false; zn.passed = false; }
   }
 
   // Restart one mission after a crash, keeping what earlier missions banked.
   // Rings and zones already finished stay finished; fuel and crates refill.
   function retryMission(mission) {
     const savedRings = course.rings.map((r) => ({ hit: r.hit, passed: r.passed }));
-    const savedZones = course.zones.map((zn) => ({ hit: zn.hit }));
+    const savedZones = course.zones.map((zn) => ({ hit: zn.hit, passed: zn.passed }));
     const banked = state.banked;
     const ringsHit = state.ringsHit;
     const zonesHit = state.zonesHit;
@@ -123,6 +163,7 @@ export function createWorld(rand) {
     state.ringsHit = ringsHit;
     state.zonesHit = zonesHit;
     state.mission = mission;
+    state.missionStart = state.time;
     state.z = mission === 2 ? MISSION_Z.ringsEnd : mission === 3 ? MISSION_Z.zonesEnd : 0;
     state.alt = 160;
     state.speed = 70;
@@ -130,7 +171,7 @@ export function createWorld(rand) {
       course.rings.forEach((r, i) => { r.hit = savedRings[i].hit; r.passed = true; });
     }
     if (mission >= 3) {
-      course.zones.forEach((zn, i) => { zn.hit = savedZones[i].hit; });
+      course.zones.forEach((zn, i) => { zn.hit = savedZones[i].hit; zn.passed = savedZones[i].passed; });
     }
     say(mission === 1 ? 'RING RUN — again' : mission === 2 ? 'SUPPLY DROP — again' : 'STORM LANDING — again');
   }
@@ -139,7 +180,9 @@ export function createWorld(rand) {
     return course.rings.find((r) => !r.passed) ?? null;
   }
   function nextZone() {
-    return course.zones.find((zn) => !zn.hit) ?? null;
+    // The next zone still ahead: hit or already-flown-past zones do not count,
+    // or the pilot would keep aiming at a zone behind the plane.
+    return course.zones.find((zn) => !zn.hit && !zn.passed) ?? null;
   }
 
   function say(text) {
@@ -154,8 +197,34 @@ export function createWorld(rand) {
   }
 
   function finishMission() {
+    const m = state.mission;
+    const elapsed = state.time - state.missionStart;
+    state.missionTimes[m] = Math.round(elapsed * 10) / 10;
+    // Par-time bonus: fly the mission inside its par and it pays extra —
+    // but only for a run that actually flew it (6+ rings, 3+ zones), so
+    // drifting straight through on the clock earns nothing.
+    const par = m === 1 ? TIME_PAR_RINGS : TIME_PAR_ZONES;
+    const timeBonus = m === 1 ? SCORE_TIME_RINGS : SCORE_TIME_ZONES;
+    const flewIt = m === 1 ? state.ringsHit >= 6 : state.zonesHit >= 3;
+    if (flewIt && elapsed <= par) {
+      state.score += timeBonus;
+      state.scoreParts.bonus += timeBonus;
+      say(`BEAT THE CLOCK +${timeBonus}`);
+    }
+    // Perfect-mission bonus: every ring, or every zone.
+    if (m === 1 && state.ringsHit >= RING_COUNT) {
+      state.score += SCORE_PERFECT_RINGS;
+      state.scoreParts.bonus += SCORE_PERFECT_RINGS;
+      say(`PERFECT RING RUN +${SCORE_PERFECT_RINGS}`);
+    }
+    if (m === 2 && state.zonesHit >= ZONE_COUNT) {
+      state.score += SCORE_PERFECT_ZONES;
+      state.scoreParts.bonus += SCORE_PERFECT_ZONES;
+      say(`PERFECT DROPS +${SCORE_PERFECT_ZONES}`);
+    }
     state.banked = state.score;
     state.mission += 1;
+    state.missionStart = state.time;
     return EVENT_MISSION_DONE;
   }
 
@@ -216,13 +285,25 @@ export function createWorld(rand) {
         if (zone) {
           zone.hit = true;
           state.zonesHit += 1;
-          state.score += SCORE_ZONE;
+          // Consecutive zones pay more each time: 250, 300, 350, 400, 450.
+          const pts = SCORE_ZONE + SCORE_ZONE_STREAK * state.zoneStreak;
+          state.zoneStreak += 1;
+          state.score += pts;
+          state.scoreParts.zones += pts;
           events |= EVENT_ZONE;
-          say(`SUPPLY DELIVERED +${SCORE_ZONE}`);
+          say(`SUPPLY DELIVERED +${pts}`);
         }
       }
     }
     state.cratesFalling = state.cratesFalling.filter((c) => !c.done);
+
+    // Flying past a zone without supplying it breaks the zone streak.
+    for (const zn of course.zones) {
+      if (!zn.hit && !zn.passed && state.z > zn.z + zn.r) {
+        zn.passed = true;
+        state.zoneStreak = 0;
+      }
+    }
 
     // Drop a crate (one per pull; the bay needs 1.5 s to ready the next).
     if (state.dropCooldown > 0) state.dropCooldown -= dt;
@@ -247,10 +328,17 @@ export function createWorld(rand) {
             r.hit = true;
             state.ringsHit += 1;
             state.streak += 1;
-            const pts = SCORE_RING + SCORE_STREAK * (state.streak - 1);
+            let pts = SCORE_RING + SCORE_STREAK * (state.streak - 1);
+            // Dead centre through the ring pays a precision bonus.
+            const precise = Math.hypot(dx, dy) < RING_PRECISION_DIST;
+            if (precise) {
+              pts += SCORE_RING_PRECISION;
+              state.scoreParts.bonus += SCORE_RING_PRECISION;
+            }
             state.score += pts;
+            state.scoreParts.rings += pts - (precise ? SCORE_RING_PRECISION : 0);
             events |= EVENT_RING;
-            say(`RING ${state.ringsHit}/10 +${pts}`);
+            say(`RING ${state.ringsHit}/${RING_COUNT} +${pts}${precise ? ' — DEAD CENTRE' : ''}`);
           } else {
             state.streak = 0;
           }
@@ -280,8 +368,25 @@ export function createWorld(rand) {
           const fuelBonus = Math.round(state.fuel * 2);
           state.landScore = SCORE_LAND_BASE + centerBonus + smoothBonus + fuelBonus;
           state.score += state.landScore;
+          state.scoreParts.landing += state.landScore;
+          let extra = '';
+          // Greased it: gentle, centred, no damage — the landing to brag about.
+          if (vs <= LAND_GREASED_VS && Math.abs(state.x) <= RUNWAY.halfWidth * 0.5 && state.damage === 0) {
+            state.score += SCORE_GREASED;
+            state.scoreParts.bonus += SCORE_GREASED;
+            state.landScore += SCORE_GREASED;
+            extra += ` GREASED +${SCORE_GREASED}`;
+          }
+          // Mission 3 par-time bonus.
+          const elapsed3 = state.time - state.missionStart;
+          state.missionTimes[3] = Math.round(elapsed3 * 10) / 10;
+          if (elapsed3 <= TIME_PAR_LAND) {
+            state.score += SCORE_TIME_LAND;
+            state.scoreParts.bonus += SCORE_TIME_LAND;
+            extra += ` BEAT THE CLOCK +${SCORE_TIME_LAND}`;
+          }
           events |= EVENT_LANDED;
-          say(`TOUCHDOWN! +${state.landScore}`);
+          say(`TOUCHDOWN! +${state.landScore}${extra}`);
         } else if (state.damage < 100) {
           state.damage += 45;
           state.alt = 10;
@@ -313,6 +418,10 @@ export function createWorld(rand) {
     course,
     trees,
     clouds,
+    houses,
+    windsock,
+    hangar,
+    riverX,
     groundAt,
     reset,
     retryMission,

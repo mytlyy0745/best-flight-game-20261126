@@ -33,15 +33,16 @@ function autopilot(world) {
     const zone = world.nextZone();
     if (zone) {
       targetX = zone.x;
-      targetAlt = 80;
-      targetSpeed = 78;
+      targetAlt = 70;
+      targetSpeed = 72;
       // Release when the crate's predicted landing point (it keeps the
       // plane's forward speed while it falls to the ground below the
-      // zone) crosses the zone.
+      // zone) crosses the zone. The window is the zone's own radius
+      // (36 m) with a little slack, so a well-flown pass converts.
       const ground = world.groundAt(zone.z);
       const fallTime = Math.sqrt((2 * Math.max(15, s.alt - ground)) / 9.8);
       const predictedZ = s.z + s.speed * fallTime;
-      if (Math.abs(s.x - zone.x) < 18 && Math.abs(predictedZ - zone.z) < 25) drop = true;
+      if (Math.abs(s.x - zone.x) < 24 && Math.abs(predictedZ - zone.z) < 30) drop = true;
     }
   } else {
     // Final: glide down the centreline, fighting the crosswind.
@@ -56,17 +57,20 @@ function autopilot(world) {
   // The crosswind adds to the lateral speed, so the heading that holds a
   // wanted lateral velocity must crab into it.
   const wind = s.mission === 3 && s.z > 5000 ? CROSSWIND : 0;
-  const wantLateral = clamp((targetX - s.x) * 0.45, -32, 32);
+  const wantLateral = clamp((targetX - s.x) * 0.5, -40, 40);
   const wantHeading = 90 + (Math.asin(clamp((wantLateral - wind) / Math.max(40, s.speed), -1, 1)) * 180) / Math.PI;
-  let roll = clamp((wantHeading - s.heading) * 0.09, -1, 1);
+  let roll = clamp((wantHeading - s.heading) * 0.13, -1, 1);
   roll -= s.roll * 0.25;
   roll = clamp(roll, -1, 1);
 
   // Over the strip, hold a steady gentle descent so she actually touches
   // down instead of floating on the glide path forever.
+  // Descent is allowed to be steeper than the climb: the drop run leaves
+  // the rings high and must get down to drop altitude before the first
+  // release point, or the window passes before it.
   const wantVs = s.mission === 3 && s.z >= RUNWAY.z0
     ? -4.5
-    : clamp((targetAlt - s.alt) * 0.4, -20, 20);
+    : clamp((targetAlt - s.alt) * 0.45, -28, 20);
   let pitch = clamp((wantVs - s.vs) * 0.09, -1, 1);
   // Flare on short final: soften the descent only while it is steep.
   if (s.mission === 3 && s.z >= RUNWAY.z0 - 120 && s.alt < 12 && s.vs < -5) {

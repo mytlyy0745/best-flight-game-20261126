@@ -1,7 +1,7 @@
 // Sky Courier — everything the eye sees: pseudo-3D chase view over
 // rolling terrain, the aircraft, the rings and the runway, then the HUD
 // instruments and the screen overlays. All drawing is plain 2D canvas.
-import { SEG_LEN, VIEW_DIST, RUNWAY, MISSION_Z } from './config.js';
+import { SEG_LEN, VIEW_DIST, RUNWAY, MISSION_Z, RING_COUNT, RATING_ACE, RATING_SKILLED } from './config.js';
 
 export const SCREEN_TITLE = 0;
 export const SCREEN_BRIEF = 1;
@@ -13,8 +13,11 @@ export const SCREEN_WIN = 6;
 
 const FIELDS = [
   [96, 148, 74], [124, 168, 82], [74, 128, 66], [176, 164, 96],
-  [110, 158, 96], [88, 138, 88], [150, 150, 84],
+  [110, 158, 96], [88, 138, 88], [150, 150, 84], [138, 118, 70],
+  [92, 152, 112],
 ];
+const RIVER_COL = [72, 132, 182];
+const ROAD_COL = [104, 104, 110];
 const SKY_TOP = [38, 96, 168];
 const SKY_HORIZON = [246, 201, 138];
 
@@ -77,17 +80,32 @@ export function createRenderer(canvas) {
     const amp = layer === 0 ? 34 : 22;
     const speed = layer === 0 ? 0.05 : 0.11;
     const col = layer === 0 ? 'rgba(74,98,128,0.75)' : 'rgba(96,122,150,0.6)';
-    ctx.fillStyle = col;
-    ctx.beginPath();
-    ctx.moveTo(0, horizonY + 2);
+    // Sample the ridge first so snow caps can sit on its peaks.
+    const ridge = [];
     for (let x = 0; x <= w; x += 16) {
       const wx = x + camZ * speed * 10 - camX * (layer === 0 ? 2 : 5);
       const y = horizonY - base - amp * Math.abs(Math.sin(wx * 0.004) * 0.7 + Math.sin(wx * 0.011 + 2) * 0.5) - amp * 0.4 * Math.sin(wx * 0.027 + 1);
-      ctx.lineTo(x, y);
+      ridge.push([x, y]);
     }
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.moveTo(0, horizonY + 2);
+    for (const [x, y] of ridge) ctx.lineTo(x, y);
     ctx.lineTo(w, horizonY + 2);
     ctx.closePath();
     ctx.fill();
+    // Snow caps on the far range's peaks.
+    if (layer === 0) {
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      for (let i = 1; i < ridge.length - 1; i += 1) {
+        const [x, y] = ridge[i];
+        if (y < ridge[i - 1][1] - 2 && y < ridge[i + 1][1] - 2) {
+          ctx.beginPath();
+          ctx.ellipse(x, y + 5, 26, 9, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
   }
 
   function drawClouds(w, horizonY, camZ, camX, clouds, camDepth) {
@@ -99,10 +117,14 @@ export function createRenderer(canvas) {
       const sy = horizonY - (camDepth * (c.y - 40)) / d;
       const s = (camDepth * 34 * c.s) / d;
       if (sx < -120 || sx > w + 120 || sy < -60 || sy > horizonY) continue;
+      // Keep the top strip clear so bright clouds never sit behind the
+      // mission banner and wash out its text.
+      if (sy - s * 0.32 < 110) continue;
       ctx.beginPath();
       ctx.ellipse(sx, sy, s, s * 0.32, 0, 0, Math.PI * 2);
       ctx.ellipse(sx - s * 0.5, sy + s * 0.08, s * 0.6, s * 0.26, 0, 0, Math.PI * 2);
       ctx.ellipse(sx + s * 0.55, sy + s * 0.06, s * 0.65, s * 0.28, 0, 0, Math.PI * 2);
+      ctx.ellipse(sx + s * 0.1, sy - s * 0.14, s * 0.55, s * 0.24, 0, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -126,6 +148,13 @@ export function createRenderer(canvas) {
     ctx.moveTo(-112, 10); ctx.lineTo(-16, -2); ctx.lineTo(-14, 6); ctx.lineTo(-108, 20); ctx.closePath();
     ctx.moveTo(112, 10); ctx.lineTo(16, -2); ctx.lineTo(14, 6); ctx.lineTo(108, 20); ctx.closePath();
     ctx.fill();
+    // Wing leading-edge highlight.
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-118, 6); ctx.lineTo(-16, -8);
+    ctx.moveTo(118, 6); ctx.lineTo(16, -8);
+    ctx.stroke();
     // Tailplane.
     ctx.fillStyle = '#8f2a20';
     ctx.beginPath();
@@ -159,10 +188,23 @@ export function createRenderer(canvas) {
     ctx.beginPath();
     ctx.ellipse(0, -38, 8, 10, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = 'rgba(180,220,255,0.7)';
+    ctx.fillStyle = 'rgba(190,225,255,0.85)';
     ctx.beginPath();
-    ctx.ellipse(-2, -41, 3, 5, 0, 0, Math.PI * 2);
+    ctx.ellipse(-2, -41, 3.5, 6, 0, 0, Math.PI * 2);
     ctx.fill();
+    // Propeller blur: from chase view the spinning disc reads as a faint
+    // thin ellipse at the nose, with two blur spokes turning with time.
+    ctx.fillStyle = 'rgba(255,255,255,0.20)';
+    ctx.beginPath();
+    ctx.ellipse(0, -54, 15, 3.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const pa = time * 9;
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-Math.cos(pa) * 13, -54 - Math.sin(pa) * 3);
+    ctx.lineTo(Math.cos(pa) * 13, -54 + Math.sin(pa) * 3);
+    ctx.stroke();
     // Registration stripe.
     ctx.fillStyle = '#1d4e89';
     ctx.fillRect(-13, 8, 26, 5);
@@ -182,6 +224,8 @@ export function createRenderer(canvas) {
     ctx.strokeStyle = 'rgba(120,220,255,0.35)';
     ctx.lineWidth = 1;
     ctx.strokeRect(x + 0.5, y + 0.5, w, h);
+    // Panels are always followed by HUD text: leave the text colour set.
+    ctx.fillStyle = '#bfefff';
   }
 
   function drawHud(w, h, state, world) {
@@ -215,12 +259,14 @@ export function createRenderer(canvas) {
     ctx.strokeStyle = 'rgba(191,239,255,0.5)';
     ctx.strokeRect(w - 200.5, 85.5, 176, 10);
     ctx.fillText(`THR ${Math.round(state.throttle * 100)}%`, w - 200, 104);
-    // Mission banner, top centre.
+    // Mission banner, top centre — on its own dark panel so it stays
+    // readable when a bright cloud drifts behind it.
     const mission = world.state.mission;
     let objective = '';
-    if (mission === 1) objective = `RINGS ${world.state.ringsHit}/10`;
+    if (mission === 1) objective = `RINGS ${world.state.ringsHit}/${RING_COUNT}`;
     else if (mission === 2) objective = `DROPS ${world.state.zonesHit}/5   CRATES ${world.state.crates}`;
     else objective = `LAND ON THE RUNWAY`;
+    panel(w / 2 - 235, 8, 470, 88);
     ctx.textAlign = 'center';
     ctx.font = 'bold 17px ui-monospace, Menlo, monospace';
     ctx.fillText(`MISSION ${mission} — ${objective}`, w / 2, 20);
@@ -285,7 +331,7 @@ export function createRenderer(canvas) {
   }
 
   function overlay(w, h, lines, accent) {
-    ctx.fillStyle = 'rgba(6,12,22,0.62)';
+    ctx.fillStyle = 'rgba(6,12,22,0.45)';
     ctx.fillRect(0, 0, w, h);
     const bw = Math.min(640, w - 60);
     const bh = 54 + lines.length * 30;
@@ -339,15 +385,41 @@ export function createRenderer(canvas) {
       if (i < segCount) {
         const haze = clamp(1 - d / VIEW_DIST, 0, 1) * 0.55;
         const onRunway = z >= RUNWAY.z0 && z <= RUNWAY.z1;
+        const topY = Math.min(prevY, y);
+        const bandH = Math.abs(prevY - y) + 1.5;
+        // A cross-road near the village, drawn as a full-width grey band.
+        const crossRoad = !onRunway && z >= 5740 && z <= 5770;
         const field = FIELDS[Math.floor(hash(i + Math.floor(camZ / SEG_LEN)) * FIELDS.length)];
-        const col = onRunway ? [96, 96, 100] : field;
+        const col = onRunway ? [96, 96, 100] : crossRoad ? ROAD_COL : field;
         ctx.fillStyle = mix3(col, SKY_HORIZON, haze * 0.7);
-        ctx.fillRect(-40, Math.min(prevY, y), w + 80, Math.abs(prevY - y) + 1.5);
+        ctx.fillRect(-40, topY, w + 80, bandH);
+        // The river winds across the farmland (ends before the airfield).
+        if (!onRunway && !crossRoad && z < 5600) {
+          const rx = w / 2 + (camDepth * (world.riverX(z) - camX)) / d;
+          const rw = Math.max(2, (camDepth * 34) / d);
+          if (rx + rw > -20 && rx - rw < w + 20) {
+            ctx.fillStyle = mix3(RIVER_COL, SKY_HORIZON, haze * 0.7);
+            ctx.fillRect(rx - rw / 2, topY, rw, bandH);
+          }
+        }
+        // The lane that runs beside the track, and hedgerows on some bands.
+        if (!onRunway && !crossRoad) {
+          const lx = w / 2 + (camDepth * (-140 - camX)) / d;
+          const lw = Math.max(1.5, (camDepth * 9) / d);
+          if (lx + lw > -20 && lx - lw < w + 20) {
+            ctx.fillStyle = mix3(ROAD_COL, SKY_HORIZON, haze * 0.7);
+            ctx.fillRect(lx - lw / 2, topY, lw, bandH);
+          }
+          if (hash(i * 29 + 5) < 0.35) {
+            ctx.fillStyle = mix3([42, 82, 46], SKY_HORIZON, haze * 0.7);
+            ctx.fillRect(-40, topY, w + 80, 2);
+          }
+        }
         // Field patch: a darker strip across part of the band.
-        if (!onRunway && hash(i * 7 + 3) < 0.5) {
+        if (!onRunway && !crossRoad && hash(i * 7 + 3) < 0.5) {
           const px = hash(i * 13 + 1) * w;
           ctx.fillStyle = mix3([52, 96, 52], SKY_HORIZON, haze * 0.7);
-          ctx.fillRect(px, Math.min(prevY, y), w * 0.22, Math.abs(prevY - y) + 1.5);
+          ctx.fillRect(px, topY, w * 0.22, bandH);
         }
         // Runway centreline dashes.
         if (onRunway) {
@@ -367,12 +439,23 @@ export function createRenderer(canvas) {
           ctx.moveTo(cx + half, y);
           ctx.lineTo(cx + half, prevY);
           ctx.stroke();
+          // Taxiway beside the strip, and amber edge lights down both sides.
+          const taxiW = Math.max(2, (camDepth * 12) / d);
+          ctx.fillStyle = mix3([70, 70, 78], SKY_HORIZON, haze * 0.7);
+          ctx.fillRect(cx + half, topY, taxiW, bandH);
+          const midY = (y + prevY) / 2;
+          const lr = Math.max(1, half * 0.05);
+          ctx.fillStyle = 'rgba(255,190,60,0.9)';
+          ctx.beginPath();
+          ctx.arc(cx - half, midY, lr, 0, Math.PI * 2);
+          ctx.arc(cx + half, midY, lr, 0, Math.PI * 2);
+          ctx.fill();
         }
       }
       prevY = y;
     }
 
-    // Objects, far to near: zones, trees, rings, falling crates.
+    // Objects, far to near: zones, trees, houses, rings, falling crates.
     const drawables = [];
     for (const zn of world.course.zones) {
       const d = zn.z - camZ;
@@ -381,6 +464,23 @@ export function createRenderer(canvas) {
     for (const t of world.trees) {
       const d = t.z - camZ;
       if (d > 20 && d < VIEW_DIST) drawables.push({ d, kind: 'tree', o: t });
+    }
+    for (const hs of world.houses) {
+      const d = hs.z - camZ;
+      if (d > 20 && d < VIEW_DIST) drawables.push({ d, kind: 'house', o: hs });
+    }
+    {
+      const d = world.windsock.z - camZ;
+      if (d > 20 && d < VIEW_DIST) drawables.push({ d, kind: 'sock', o: world.windsock });
+    }
+    {
+      const d = world.hangar.z - camZ;
+      if (d > 20 && d < VIEW_DIST) drawables.push({ d, kind: 'hangar', o: world.hangar });
+    }
+    {
+      // Approach light bar just before the strip: a row of white lights.
+      const d = 5975 - camZ;
+      if (d > 20 && d < VIEW_DIST) drawables.push({ d, kind: 'appr', o: { z: 5975 } });
     }
     for (const r of world.course.rings) {
       const d = r.z - camZ;
@@ -419,15 +519,92 @@ export function createRenderer(canvas) {
         const gy = horizonY + (camDepth * (camAlt - world.groundAt(t.z))) / d;
         const s = (camDepth * 9 * t.s) / d;
         if (s < 2 || sx < -20 || sx > w + 20) continue;
-        ctx.fillStyle = '#2c5a2e';
+        if (t.round) {
+          // Round-canopy tree: a leafy crown over a trunk.
+          ctx.fillStyle = '#3a6b35';
+          ctx.beginPath();
+          ctx.arc(sx, gy - s * 1.5, s * 0.85, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#2c5a2e';
+          ctx.beginPath();
+          ctx.arc(sx - s * 0.3, gy - s * 1.2, s * 0.55, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#5a3a22';
+          ctx.fillRect(sx - s * 0.1, gy - s * 0.7, s * 0.2, s * 0.7);
+        } else {
+          ctx.fillStyle = '#2c5a2e';
+          ctx.beginPath();
+          ctx.moveTo(sx, gy - s * 2.4);
+          ctx.lineTo(sx - s * 0.8, gy);
+          ctx.lineTo(sx + s * 0.8, gy);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = '#5a3a22';
+          ctx.fillRect(sx - s * 0.1, gy - s * 0.4, s * 0.2, s * 0.4);
+        }
+      } else if (item.kind === 'house') {
+        const hs = item.o;
+        const sx = w / 2 + (camDepth * (hs.x - camX)) / d;
+        const gy = horizonY + (camDepth * (camAlt - world.groundAt(hs.z))) / d;
+        const s = (camDepth * 8 * hs.s) / d;
+        if (s < 3 || sx < -30 || sx > w + 30) continue;
+        const walls = [['#e8dcc0', '#b0503c'], ['#d8c8a8', '#7a4a30'], ['#e0d0b0', '#a03c30']][hs.tone];
+        ctx.fillStyle = walls[0];
+        ctx.fillRect(sx - s * 0.6, gy - s * 0.9, s * 1.2, s * 0.9);
+        ctx.fillStyle = walls[1];
         ctx.beginPath();
-        ctx.moveTo(sx, gy - s * 2.4);
-        ctx.lineTo(sx - s * 0.8, gy);
-        ctx.lineTo(sx + s * 0.8, gy);
+        ctx.moveTo(sx - s * 0.75, gy - s * 0.9);
+        ctx.lineTo(sx, gy - s * 1.6);
+        ctx.lineTo(sx + s * 0.75, gy - s * 0.9);
         ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = '#5a3a22';
-        ctx.fillRect(sx - s * 0.1, gy - s * 0.4, s * 0.2, s * 0.4);
+        ctx.fillStyle = '#2c3a4a';
+        ctx.fillRect(sx - s * 0.15, gy - s * 0.55, s * 0.3, s * 0.35);
+      } else if (item.kind === 'sock') {
+        const o = item.o;
+        const sx = w / 2 + (camDepth * (o.x - camX)) / d;
+        const gy = horizonY + (camDepth * (camAlt - world.groundAt(o.z))) / d;
+        const s = (camDepth * 8) / d;
+        if (s < 2 || sx < -30 || sx > w + 30) continue;
+        // Windsock: pole with an orange cone streaming downwind (left,
+        // the crosswind blows from the right).
+        ctx.strokeStyle = '#d8d8d8';
+        ctx.lineWidth = Math.max(1, s * 0.08);
+        ctx.beginPath();
+        ctx.moveTo(sx, gy);
+        ctx.lineTo(sx, gy - s * 2.2);
+        ctx.stroke();
+        ctx.fillStyle = '#ff7a2a';
+        ctx.beginPath();
+        ctx.moveTo(sx, gy - s * 2.2);
+        ctx.lineTo(sx - s * 1.1, gy - s * 1.85);
+        ctx.lineTo(sx - s * 1.1, gy - s * 2.05);
+        ctx.closePath();
+        ctx.fill();
+      } else if (item.kind === 'hangar') {
+        const o = item.o;
+        const sx = w / 2 + (camDepth * (o.x - camX)) / d;
+        const gy = horizonY + (camDepth * (camAlt - world.groundAt(o.z))) / d;
+        const s = (camDepth * 16 * o.s) / d;
+        if (s < 4 || sx < -80 || sx > w + 80) continue;
+        ctx.fillStyle = '#7a8a7a';
+        ctx.fillRect(sx - s, gy - s * 0.9, s * 2, s * 0.9);
+        ctx.beginPath();
+        ctx.arc(sx, gy - s * 0.9, s, Math.PI, 0);
+        ctx.fill();
+        ctx.fillStyle = '#4a5a4a';
+        ctx.fillRect(sx - s * 0.6, gy - s * 0.55, s * 1.2, s * 0.55);
+      } else if (item.kind === 'appr') {
+        const o = item.o;
+        const gy = horizonY + (camDepth * (camAlt - world.groundAt(o.z))) / d;
+        for (let k = -3; k <= 3; k += 1) {
+          const sx = w / 2 + (camDepth * (k * 10 - camX)) / d;
+          const r = Math.max(1, (camDepth * 0.9) / d);
+          ctx.fillStyle = 'rgba(255,255,255,0.95)';
+          ctx.beginPath();
+          ctx.arc(sx, gy, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
       } else if (item.kind === 'ring') {
         const r = item.o;
         const sx = w / 2 + (camDepth * (r.x - camX)) / d;
@@ -490,6 +667,25 @@ export function createRenderer(canvas) {
     }
 
     drawPlane(w, h, state, state.time);
+    // Contrails streaming off the wingtips at speed.
+    if (state.speed > 90 && screen === SCREEN_PLAY) {
+      const scale = Math.min(w, h) / 720;
+      const cx = w / 2;
+      const cy = h * 0.6 - state.pitch * 16;
+      for (const side of [-1, 1]) {
+        const x0 = cx + side * 112 * scale;
+        const y0 = cy + 12 * scale;
+        const g2 = ctx.createLinearGradient(x0, y0, x0 + side * 14 * scale, y0 + 90 * scale);
+        g2.addColorStop(0, 'rgba(255,255,255,0.28)');
+        g2.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.strokeStyle = g2;
+        ctx.lineWidth = 2.5 * scale;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x0 + side * 14 * scale, y0 + 90 * scale);
+        ctx.stroke();
+      }
+    }
     drawHud(w, h, state, world);
 
     if (screen === SCREEN_TITLE) {
@@ -505,7 +701,7 @@ export function createRenderer(canvas) {
       const m = world.state.mission;
       const defs = [
         null,
-        ['MISSION 1 — RING RUN', 'Fly through all 10 rings. Throttle with Shift / Ctrl,', 'steer with the arrow keys or WASD. Rings pay 100,', 'streaks pay extra. Press Space to launch.'],
+        ['MISSION 1 — RING RUN', 'Fly through all 12 rings. Throttle with Shift / Ctrl,', 'steer with the arrow keys or WASD. Rings pay 100,', 'streaks and dead-centre hits pay extra. Press Space to launch.'],
         ['MISSION 2 — SUPPLY DROP', 'Five villages need supplies. Press Space over a', 'marked circle to drop a crate — it keeps your speed,', 'so release a little early. 6 crates, 5 zones.', 'Press Space to launch.'],
         ['MISSION 3 — STORM LANDING', 'Crosswind from the right. Land on the runway:', 'slow, level, gentle — under 100 m/s and under', '7 m/s descent, inside the strip. Press Space.'],
       ];
@@ -526,7 +722,7 @@ export function createRenderer(canvas) {
         'Press Space for the next sortie',
       ], '#7dffa8');
     } else if (screen === SCREEN_WIN) {
-      const rating = state.score >= 3800 ? 'ACE OF THE SKIES' : state.score >= 2800 ? 'SKILLED PILOT' : 'ROOKIE WINGS';
+      const rating = state.score >= RATING_ACE ? 'ACE OF THE SKIES' : state.score >= RATING_SKILLED ? 'SKILLED PILOT' : 'ROOKIE WINGS';
       overlay(w, h, [
         'DELIVERED — ALL MISSIONS COMPLETE',
         rating,

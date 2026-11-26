@@ -19,15 +19,15 @@ export const FUEL_START = 100;
 export const FUEL_DRAIN_BASE = 0.12;
 export const FUEL_DRAIN_THROTTLE = 0.5;
 
-// Rings: 10 of them, mission 1. Zones: 5 drop zones, mission 2.
+// Rings: 12 of them, mission 1. Zones: 5 drop zones, mission 2.
 // Runway: flat strip mission 3 must land on.
-export const RING_COUNT = 10;
+export const RING_COUNT = 12;
 export const RING_RADIUS = 30;
 export const ZONE_COUNT = 5;
 export const ZONE_RADIUS = 36;
 export const CRATES = 6;
 export const RUNWAY = { z0: 6000, z1: 6600, halfWidth: 18 };
-export const MISSION_Z = { ringsEnd: 2600, zonesEnd: 5300 };
+export const MISSION_Z = { ringsEnd: 3100, zonesEnd: 5500 };
 
 // Scoring.
 export const SCORE_RING = 100;
@@ -36,6 +36,27 @@ export const SCORE_ZONE = 250;
 export const SCORE_LAND_BASE = 400;
 export const SCORE_LAND_CENTER = 300;
 export const SCORE_LAND_SMOOTH = 200;
+
+// New scoring depth — every one of these is earned by flying well:
+// precision rings, escalating zone streaks, perfect missions, par times,
+// and a greased landing. A great run can clear 5000; the ceiling is ~7300.
+export const SCORE_RING_PRECISION = 25; // ring hit within 8 m of centre
+export const RING_PRECISION_DIST = 8;
+export const SCORE_ZONE_STREAK = 50; // each consecutive zone pays +50 more
+export const SCORE_PERFECT_RINGS = 300; // all rings in mission 1
+export const SCORE_PERFECT_ZONES = 300; // all zones in mission 2
+export const SCORE_TIME_RINGS = 200; // mission 1 inside par time
+export const SCORE_TIME_ZONES = 200; // mission 2 inside par time
+export const SCORE_TIME_LAND = 200; // mission 3 inside par time
+export const TIME_PAR_RINGS = 45; // seconds, from mission start
+export const TIME_PAR_ZONES = 50;
+export const TIME_PAR_LAND = 45;
+export const SCORE_GREASED = 250; // touchdown gentle, centred, no damage
+export const LAND_GREASED_VS = 3.5; // m/s descent at touchdown
+
+// Ratings shown on the win screen.
+export const RATING_ACE = 5000;
+export const RATING_SKILLED = 3800;
 
 // Landing envelope (mission 3, on the runway strip only).
 export const LAND_MAX_VS = 7; // m/s descent at touchdown
@@ -46,8 +67,8 @@ export const MISSIONS = [
   {
     id: 1,
     name: 'RING RUN',
-    brief: 'Fly through all 10 rings. Throttle with Shift / Ctrl, steer with the arrow keys or WASD. A ring pays 100, streaks pay extra.',
-    goal: 'Fly through 10 rings',
+    brief: 'Fly through all 12 rings. Throttle with Shift / Ctrl, steer with the arrow keys or WASD. A ring pays 100, streaks pay extra, dead-centre hits pay more.',
+    goal: 'Fly through 12 rings',
   },
   {
     id: 2,
