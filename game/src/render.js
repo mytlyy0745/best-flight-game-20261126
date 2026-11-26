@@ -14,7 +14,11 @@ export const SCREEN_WIN = 6;
 const FIELDS = [
   [96, 148, 74], [124, 168, 82], [74, 128, 66], [176, 164, 96],
   [110, 158, 96], [88, 138, 88], [150, 150, 84], [138, 118, 70],
-  [92, 152, 112],
+  [92, 152, 112], [150, 112, 70], [190, 175, 120], [118, 142, 92],
+];
+const PATCH_COLS = [
+  [52, 96, 52], [138, 118, 70], [112, 96, 58], [70, 120, 70],
+  [160, 140, 90], [96, 128, 80],
 ];
 const RIVER_COL = [72, 132, 182];
 const ROAD_COL = [104, 104, 110];
@@ -79,7 +83,9 @@ export function createRenderer(canvas) {
     const base = layer === 0 ? 66 : 40;
     const amp = layer === 0 ? 34 : 22;
     const speed = layer === 0 ? 0.05 : 0.11;
-    const col = layer === 0 ? 'rgba(74,98,128,0.75)' : 'rgba(96,122,150,0.6)';
+    // Far range is hazier and lighter than the near one (atmospheric
+    // perspective), so the ridge reads as distance, not a flat wall.
+    const col = layer === 0 ? 'rgba(110,136,162,0.62)' : 'rgba(96,122,150,0.6)';
     // Sample the ridge first so snow caps can sit on its peaks.
     const ridge = [];
     for (let x = 0; x <= w; x += 16) {
@@ -94,18 +100,40 @@ export function createRenderer(canvas) {
     ctx.lineTo(w, horizonY + 2);
     ctx.closePath();
     ctx.fill();
-    // Snow caps on the far range's peaks.
+    // Lit ridge edge: a faint highlight along the crest so the range
+    // has a sunlit side instead of one flat fill.
+    ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let k = 0; k < ridge.length; k += 1) {
+      const [x, y] = ridge[k];
+      if (k === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    // Snow caps on the far range's peaks — big enough to read at a glance.
     if (layer === 0) {
-      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
       for (let i = 1; i < ridge.length - 1; i += 1) {
         const [x, y] = ridge[i];
-        if (y < ridge[i - 1][1] - 2 && y < ridge[i + 1][1] - 2) {
+        if (y < ridge[i - 1][1] - 1 && y < ridge[i + 1][1] - 1) {
           ctx.beginPath();
-          ctx.ellipse(x, y + 5, 26, 9, 0, 0, Math.PI * 2);
+          ctx.ellipse(x, y + 6, 34, 11, 0, 0, Math.PI * 2);
           ctx.fill();
         }
       }
     }
+  }
+
+  function drawHaze(w, horizonY) {
+    // A soft pale veil straddling the horizon: it melts the hard line
+    // where flat ground meets sky and gives the far world atmosphere.
+    const g = ctx.createLinearGradient(0, horizonY - 46, 0, horizonY + 26);
+    g.addColorStop(0, 'rgba(246,232,200,0)');
+    g.addColorStop(0.55, 'rgba(246,232,200,0.28)');
+    g.addColorStop(1, 'rgba(246,232,200,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, horizonY - 46, w, 72);
   }
 
   function drawClouds(w, horizonY, camZ, camX, clouds, camDepth) {
@@ -200,20 +228,22 @@ export function createRenderer(canvas) {
     ctx.fill();
     // Propeller blur: from chase view the spinning disc reads as a faint
     // thin ellipse at the nose, with two blur spokes turning with time.
-    ctx.fillStyle = 'rgba(255,255,255,0.20)';
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
     ctx.beginPath();
     ctx.ellipse(0, -54, 15, 3.5, 0, 0, Math.PI * 2);
     ctx.fill();
     const pa = time * 9;
-    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(-Math.cos(pa) * 13, -54 - Math.sin(pa) * 3);
     ctx.lineTo(Math.cos(pa) * 13, -54 + Math.sin(pa) * 3);
     ctx.stroke();
-    // Registration stripe.
+    // Registration stripe, plus a thin red cheatline below it.
     ctx.fillStyle = '#1d4e89';
     ctx.fillRect(-13, 8, 26, 5);
+    ctx.fillStyle = '#c23b2e';
+    ctx.fillRect(-13, 15, 26, 2);
     // Nav lights, blinking.
     if (Math.floor(time * 2) % 2 === 0) {
       ctx.fillStyle = '#ff4444';
@@ -345,7 +375,7 @@ export function createRenderer(canvas) {
   }
 
   function overlay(w, h, lines, accent) {
-    ctx.fillStyle = 'rgba(6,12,22,0.45)';
+    ctx.fillStyle = 'rgba(6,12,22,0.38)';
     ctx.fillRect(0, 0, w, h);
     const bw = Math.min(640, w - 60);
     const bh = 54 + lines.length * 30;
@@ -381,6 +411,7 @@ export function createRenderer(canvas) {
     drawSky(w, h, horizonY, state.time);
     drawMountains(w, h, horizonY, camZ, camX, 0);
     drawMountains(w, h, horizonY, camZ, camX, 1);
+    drawHaze(w, horizonY);
 
     // Bank the world a little with the roll.
     ctx.save();
@@ -449,11 +480,65 @@ export function createRenderer(canvas) {
             ctx.fillRect(-40, topY, w + 80, 2);
           }
         }
-        // Field patch: a darker strip across part of the band.
-        if (!onRunway && !crossRoad && hash(i * 7 + 3) < 0.5) {
-          const px = hash(i * 13 + 1) * w;
-          ctx.fillStyle = mix3([52, 96, 52], SKY_HORIZON, haze * 0.7);
-          ctx.fillRect(px, topY, w * 0.22, bandH);
+        // Field patchwork: two or three irregular plots per band, each a
+        // different crop colour with a hedgerow edge, so the ground reads
+        // as a patchwork of fields instead of one full-width stripe.
+        // Seeded by the band index, so the same band always looks the same.
+        if (!onRunway && !crossRoad) {
+          const patchCount = 2 + Math.floor(hash(i * 41 + 9) * 2);
+          for (let p = 0; p < patchCount; p += 1) {
+            const px = hash(i * 47 + p * 23 + 3) * w * 0.9;
+            const pw = w * (0.12 + hash(i * 19 + p * 31 + 7) * 0.22);
+            const pcol = PATCH_COLS[Math.floor(hash(i * 53 + p * 11 + 5) * PATCH_COLS.length)];
+            ctx.fillStyle = mix3(pcol, SKY_HORIZON, haze * 0.7);
+            ctx.fillRect(px, topY, pw, bandH);
+            // Tall near bands: split the patch horizontally with a
+            // hedgerow line and a darker lower half, so a huge
+            // foreground band does not read as one flat slab. The split
+            // sits inside the VISIBLE part of the band — a tall band
+            // runs far below the frame, so a fraction of its full height
+            // would land off-screen.
+            if (bandH > 60) {
+              const visH = Math.min(bandH, h - topY);
+              const split = topY + visH * (0.4 + hash(i * 61 + p * 7) * 0.2);
+              ctx.fillStyle = mix3([40, 70, 44], SKY_HORIZON, haze * 0.7);
+              ctx.fillRect(px, split, pw, Math.max(1, visH * 0.05));
+              const darker = [Math.round(pcol[0] * 0.85), Math.round(pcol[1] * 0.85), Math.round(pcol[2] * 0.85)];
+              ctx.fillStyle = mix3(darker, SKY_HORIZON, haze * 0.7);
+              ctx.fillRect(px, split, pw, topY + bandH - split);
+            }
+            // Hedgerow along the patch's left edge.
+            ctx.fillStyle = mix3([42, 82, 46], SKY_HORIZON, haze * 0.7);
+            ctx.fillRect(px, topY, Math.max(1, bandH * 0.1), bandH);
+          }
+        }
+        // Airfield grass: mowing stripes in world space — every other
+        // 40 m strip is mown lighter, so the near airfield does not read
+        // as one flat warm slab (the near-field warm tint flattens it).
+        // Drawn before the strip, so the asphalt covers the middle.
+        if (onRunway && !crossRoad) {
+          for (let k = -20; k <= 20; k += 1) {
+            if (k % 2 !== 0) continue;
+            const wx = k * 40;
+            const sx = w / 2 + (camDepth * (wx - camX)) / d;
+            const sw = Math.max(1.5, (camDepth * 40) / d);
+            if (sx + sw < -20 || sx - sw > w + 20) continue;
+            ctx.fillStyle = mix3([124, 164, 102], SKY_HORIZON, haze * 0.7);
+            ctx.fillRect(sx - sw / 2, topY, sw, bandH);
+          }
+        }
+        // Tall near airfield bands: split horizontally with a mow line
+        // and a slightly darker lower half, so the foreground grass is
+        // not one flat slab (world-space stripes are wider than the
+        // screen this close to the camera, so they cannot do the job).
+        // The split sits inside the VISIBLE part of the band.
+        if (onRunway && !crossRoad && bandH > 60) {
+          const visH = Math.min(bandH, h - topY);
+          const split = topY + visH * (0.45 + hash(i * 71 + 3) * 0.15);
+          ctx.fillStyle = mix3([70, 110, 60], SKY_HORIZON, haze * 0.7);
+          ctx.fillRect(-40, split, w + 80, Math.max(1, visH * 0.05));
+          ctx.fillStyle = mix3([88, 119, 73], SKY_HORIZON, haze * 0.7);
+          ctx.fillRect(-40, split, w + 80, topY + bandH - split);
         }
         // The runway: asphalt strip on the grass, thin dashed centreline,
         // edge lines, taxiway and amber edge lights. Line widths are
@@ -465,6 +550,15 @@ export function createRenderer(canvas) {
           // Asphalt strip.
           ctx.fillStyle = mix3([88, 88, 96], SKY_HORIZON, haze * 0.7);
           ctx.fillRect(cx - half, topY, half * 2, bandH);
+          // Tyre marks: two dark wheel tracks down the strip, so the
+          // asphalt has texture even at close range, where the strip is
+          // wider than the screen and nothing else reads on it.
+          for (const side of [-1, 1]) {
+            const tx = cx + side * ((camDepth * 6) / d);
+            const tw = Math.max(1.5, (camDepth * 2.2) / d);
+            ctx.fillStyle = 'rgba(52,52,60,0.4)';
+            ctx.fillRect(tx - tw / 2, topY, tw, bandH);
+          }
           // Centreline dashes: 20 m of paint, 30 m of gap, in world space.
           const zm = z - SEG_LEN / 2;
           if ((((zm % 50) + 50) % 50) < 20) {
@@ -484,6 +578,22 @@ export function createRenderer(canvas) {
           ctx.moveTo(cx + half, y);
           ctx.lineTo(cx + half, prevY);
           ctx.stroke();
+          // Threshold bars at the start of the strip: eight white bars
+          // across the asphalt, so the runway's beginning reads clearly.
+          if (z - RUNWAY.z0 < 60) {
+            ctx.fillStyle = 'rgba(255,255,255,0.85)';
+            const bars = 8;
+            for (let b = 0; b < bars; b += 1) {
+              const bx0 = cx - half + ((b + 0.15) / bars) * half * 2;
+              const bw = (half * 2 * 0.7) / bars;
+              ctx.fillRect(bx0, topY, bw, bandH);
+            }
+          }
+          // Mown grass shoulder on the left of the strip, lighter than
+          // the surrounding field, so the airfield has a kept edge.
+          const shoulderW = Math.max(2, (camDepth * 10) / d);
+          ctx.fillStyle = mix3([126, 162, 100], SKY_HORIZON, haze * 0.7);
+          ctx.fillRect(cx - half - shoulderW, topY, shoulderW, bandH);
           // Taxiway beside the strip, and amber edge lights down both sides.
           const taxiW = Math.max(2, (camDepth * 12) / d);
           ctx.fillStyle = mix3([70, 70, 78], SKY_HORIZON, haze * 0.7);
@@ -575,24 +685,50 @@ export function createRenderer(canvas) {
         const gy = horizonY + (camDepth * (camAlt - world.groundAt(t.z))) / d;
         const s = (camDepth * 9 * t.s) / d;
         if (s < 2 || sx < -20 || sx > w + 20) continue;
+        // Soft ground shadow so the tree sits on the field, not on top of it.
+        ctx.fillStyle = 'rgba(0,0,0,0.16)';
+        ctx.beginPath();
+        ctx.ellipse(sx, gy, s * 0.55, s * 0.14, 0, 0, Math.PI * 2);
+        ctx.fill();
+        const greens = t.round
+          ? [['#3a6b35', '#2c5a2e'], ['#4a7a3a', '#356b33'], ['#2f6030', '#274f2a']]
+          : [['#2c5a2e', '#356b33', '#3f7a3a'], ['#27512b', '#2f6030', '#3a7038']];
+        const g = greens[Math.floor(hash(Math.floor(t.z) * 7 + Math.floor(t.x)) * greens.length)];
         if (t.round) {
-          // Round-canopy tree: a leafy crown over a trunk.
-          ctx.fillStyle = '#3a6b35';
+          // Round-canopy tree: two overlapping crowns over a trunk, so it
+          // reads as a volume from any distance.
+          ctx.fillStyle = g[0];
           ctx.beginPath();
           ctx.arc(sx, gy - s * 1.5, s * 0.85, 0, Math.PI * 2);
           ctx.fill();
-          ctx.fillStyle = '#2c5a2e';
+          ctx.fillStyle = g[1];
           ctx.beginPath();
-          ctx.arc(sx - s * 0.3, gy - s * 1.2, s * 0.55, 0, Math.PI * 2);
+          ctx.arc(sx - s * 0.35, gy - s * 1.15, s * 0.55, 0, Math.PI * 2);
           ctx.fill();
           ctx.fillStyle = '#5a3a22';
           ctx.fillRect(sx - s * 0.1, gy - s * 0.7, s * 0.2, s * 0.7);
         } else {
-          ctx.fillStyle = '#2c5a2e';
+          // Layered conifer: three stacked tiers, lightest at the top,
+          // so a big near pine reads as a pine instead of a flat triangle.
+          ctx.fillStyle = g[0];
           ctx.beginPath();
           ctx.moveTo(sx, gy - s * 2.4);
           ctx.lineTo(sx - s * 0.8, gy);
           ctx.lineTo(sx + s * 0.8, gy);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = g[1];
+          ctx.beginPath();
+          ctx.moveTo(sx, gy - s * 2.4);
+          ctx.lineTo(sx - s * 0.58, gy - s * 0.8);
+          ctx.lineTo(sx + s * 0.58, gy - s * 0.8);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = g[2];
+          ctx.beginPath();
+          ctx.moveTo(sx, gy - s * 2.4);
+          ctx.lineTo(sx - s * 0.36, gy - s * 1.6);
+          ctx.lineTo(sx + s * 0.36, gy - s * 1.6);
           ctx.closePath();
           ctx.fill();
           ctx.fillStyle = '#5a3a22';
