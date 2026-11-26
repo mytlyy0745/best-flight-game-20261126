@@ -133,13 +133,20 @@ export function createRenderer(canvas) {
         mg.addColorStop(1, fade([62, 54, 100]));
       }
     } else if (layer === 0) {
-      mg.addColorStop(0, 'rgba(172,192,214,0.8)');
-      mg.addColorStop(0.75, 'rgba(110,136,162,0.62)');
-      mg.addColorStop(1, fade([110, 136, 162]));
+      // Far range: a touch stronger than round 11's — the old mid-tone
+      // washed out against the pale horizon sky, so the range read as
+      // a flat backdrop instead of mountains with volume.
+      mg.addColorStop(0, 'rgba(164,186,210,0.84)');
+      mg.addColorStop(0.75, 'rgba(104,130,158,0.66)');
+      mg.addColorStop(1, fade([104, 130, 158]));
     } else {
-      mg.addColorStop(0, 'rgba(126,150,176,0.72)');
-      mg.addColorStop(0.75, 'rgba(96,122,150,0.6)');
-      mg.addColorStop(1, fade([96, 122, 150]));
+      // Near range: darker and more contrasted than round 11's — the
+      // old near ridge was nearly the same pale wash as the far one,
+      // so the two layers collapsed into one flat backdrop. The near
+      // range now reads as a solid nearer ridge in front of the haze.
+      mg.addColorStop(0, 'rgba(110,136,164,0.8)');
+      mg.addColorStop(0.75, 'rgba(76,102,132,0.7)');
+      mg.addColorStop(1, fade([76, 102, 132]));
     }
     ctx.fillStyle = mg;
     // Sample the ridge first so snow caps can sit on its peaks.
@@ -183,7 +190,10 @@ export function createRenderer(canvas) {
       // snow melting into the rock, not a flat white blob pasted on the
       // ridge (the round-5 caps read as white stickers on the drop and
       // land shots because their lower edge was a hard horizontal line).
-      const snowLine = horizonY - 95;
+      // The snow line sits a little lower now (horizonY−90, was −95),
+      // so the caps are bigger — round 11's caps were small white
+      // pills on a pale ridge, and the bigger caps read as snow.
+      const snowLine = horizonY - 90;
       const sg = ctx.createLinearGradient(0, horizonY - 125, 0, snowLine);
       // Warm at dusk: the sunset lights the snow, so the caps read
       // pink-gold instead of cold white against the violet sky.
@@ -664,24 +674,31 @@ export function createRenderer(canvas) {
         // full height, below the frame.
         if (!onRunway && !crossRoad && bandH > 4) {
           const visH = Math.max(0, Math.min(bandH, h - topY));
-          const furCount = Math.min(9, 3 + Math.floor(visH / 55));
+          // Count up to 12 (was 9) and rows taller: round 11's furrows
+          // were still sparse on the tallest near bands — the drop
+          // shot's foreground is one big tan slab with a handful of
+          // small dark marks, because 7 short dashes cannot fill a
+          // 250 px tall band.
+          const furCount = Math.min(12, 3 + Math.floor(visH / 35));
           ctx.fillStyle = mix3([60, 100, 58], SKY_HORIZON, haze * 0.7);
           for (let k = 0; k < furCount; k += 1) {
             const fx = hash(i * 31 + k * 17 + 2) * w;
             const fl = w * (0.05 + hash(i * 13 + k * 7) * 0.09);
-            ctx.fillRect(fx, topY + visH * ((k + 0.5) / furCount), fl, Math.max(1, visH * 0.09));
+            ctx.fillRect(fx, topY + visH * ((k + 0.5) / furCount), fl, Math.max(1, visH * 0.12));
           }
           // Field speckle: short darker marks scattered through a tall
           // band's visible height — the foreground field texture the
           // furrows alone could not give. Seeded per band/row, so the
-          // same band always looks the same.
+          // same band always looks the same. Count up to 16 (was 10)
+          // and stronger (0.2, was 0.14): round 11's speckle was
+          // nearly invisible on the drop foreground.
           if (bandH > 50) {
-            const speckCount = Math.min(10, Math.floor(visH / 40));
-            ctx.fillStyle = 'rgba(52,88,50,0.14)';
+            const speckCount = Math.min(16, Math.floor(visH / 28));
+            ctx.fillStyle = 'rgba(52,88,50,0.2)';
             for (let k = 0; k < speckCount; k += 1) {
               const spx = hash(i * 101 + k * 37 + 5) * w;
               const spw = w * (0.02 + hash(i * 73 + k * 11) * 0.05);
-              ctx.fillRect(spx, topY + visH * ((k + 0.3) / speckCount), spw, Math.max(2, visH * 0.03));
+              ctx.fillRect(spx, topY + visH * ((k + 0.3) / speckCount), spw, Math.max(2, visH * 0.04));
             }
           }
         }
@@ -785,7 +802,9 @@ export function createRenderer(canvas) {
         // and a slightly darker lower half, so the foreground grass is
         // not one flat slab (world-space stripes are wider than the
         // screen this close to the camera, so they cannot do the job).
-        // The split sits inside the VISIBLE part of the band.
+        // The split sits inside the VISIBLE part of the band. Two
+        // splits now (was one): round 11's single split still left
+        // the land shot's foreground grass as two big flat slabs.
         if (onRunway && !crossRoad && bandH > 60) {
           const visH = Math.min(bandH, h - topY);
           const split = topY + visH * (0.45 + hash(i * 71 + 3) * 0.15);
@@ -793,6 +812,21 @@ export function createRenderer(canvas) {
           ctx.fillRect(-40, split, w + 80, Math.max(1, visH * 0.05));
           ctx.fillStyle = mix3([88, 119, 73], SKY_HORIZON, haze * 0.7);
           ctx.fillRect(-40, split, w + 80, topY + bandH - split);
+          const split2 = topY + visH * (0.72 + hash(i * 83 + 5) * 0.1);
+          ctx.fillStyle = mix3([70, 110, 60], SKY_HORIZON, haze * 0.7);
+          ctx.fillRect(-40, split2, w + 80, Math.max(1, visH * 0.04));
+          ctx.fillStyle = mix3([80, 108, 66], SKY_HORIZON, haze * 0.7);
+          ctx.fillRect(-40, split2, w + 80, topY + bandH - split2);
+          // Grass speckle: short darker marks through the tall band's
+          // visible height — the same foreground texture the fields
+          // got, so the near airfield is not just mow lines on a slab.
+          const gspeckCount = Math.min(12, Math.floor(visH / 35));
+          ctx.fillStyle = 'rgba(52,96,52,0.16)';
+          for (let k = 0; k < gspeckCount; k += 1) {
+            const gx = hash(i * 113 + k * 41 + 7) * w;
+            const gw = w * (0.02 + hash(i * 79 + k * 13) * 0.05);
+            ctx.fillRect(gx, topY + visH * ((k + 0.3) / gspeckCount), gw, Math.max(2, visH * 0.03));
+          }
         }
         // The runway: asphalt strip on the grass, thin dashed centreline,
         // edge lines, taxiway and amber edge lights. Line widths are
@@ -809,21 +843,33 @@ export function createRenderer(canvas) {
           // Asphalt aggregate: short subtle dashes across the strip,
           // seeded per band, so the near asphalt has texture even where
           // the tyre marks have diverged off-screen and the centreline
-          // is in a gap. The count scales with the VISIBLE band height
-          // and the dashes sit inside the VISIBLE strip: the old fixed
-          // 5 faint dashes, spread across the whole strip width (wider
-          // than the screen up close), vanished on the near asphalt,
-          // whose bottom half read as one flat grey slab.
+          // is in a gap. The count scales with the VISIBLE strip AREA
+          // (height and width): round 11's height-only count capped at
+          // 14, which on the bottom band — ~180 px tall and wider than
+          // the screen — is ~3% coverage, so the land shot's foreground
+          // still read as one flat grey slab. Dashes are bigger and
+          // stronger too (alpha 0.4, was 0.32).
           if (bandH > 8) {
             const visH = Math.max(0, Math.min(bandH, h - topY));
-            const aggCount = Math.min(14, 5 + Math.floor(visH / 22));
             const stripL = Math.max(cx - half, -20);
             const stripR = Math.min(cx + half, w + 20);
-            ctx.fillStyle = 'rgba(52,52,60,0.32)';
+            const stripW = Math.max(1, stripR - stripL);
+            const aggCount = Math.min(30, 5 + Math.floor(visH / 22) + Math.floor(stripW / 130));
+            ctx.fillStyle = 'rgba(52,52,60,0.4)';
             for (let k = 0; k < aggCount; k += 1) {
-              const ax = stripL + hash(i * 97 + k * 19) * Math.max(1, stripR - stripL);
-              const aw = Math.min(60, Math.max(8, half * 0.09));
-              ctx.fillRect(ax, topY + visH * ((k + 0.5) / aggCount), aw, Math.min(9, Math.max(2.5, visH * 0.04)));
+              const ax = stripL + hash(i * 97 + k * 19) * stripW;
+              const aw = Math.min(80, Math.max(8, half * 0.09));
+              ctx.fillRect(ax, topY + visH * ((k + 0.5) / aggCount), aw, Math.min(12, Math.max(2.5, visH * 0.05)));
+            }
+            // Pale aggregate: a second, lighter pass — asphalt is not
+            // one tone, and the pale flecks stop the dark dashes
+            // reading as dirt on the strip.
+            const paleCount = Math.min(12, 3 + Math.floor(visH / 40));
+            ctx.fillStyle = 'rgba(210,214,222,0.16)';
+            for (let k = 0; k < paleCount; k += 1) {
+              const px = stripL + hash(i * 89 + k * 23 + 3) * stripW;
+              const pw = Math.min(70, Math.max(8, half * 0.08));
+              ctx.fillRect(px, topY + visH * ((k + 0.3) / paleCount), pw, Math.min(10, Math.max(2.5, visH * 0.04)));
             }
           }
           // Tyre marks: two dark wheel tracks down the strip, so the
