@@ -92,9 +92,20 @@ export function createRenderer(canvas) {
     ctx.beginPath();
     ctx.arc(sx, sy, dusk ? 28 : 26, 0, Math.PI * 2);
     ctx.fill();
+    // Stars at dusk: the violet sky over the landing is empty — a few
+    // early stars give it depth. Seeded by index, static on screen.
+    if (dusk) {
+      for (let k = 0; k < 48; k += 1) {
+        const sx2 = hash(k * 13 + 1) * w;
+        const sy2 = hash(k * 29 + 7) * h * 0.32;
+        const sa = 0.25 + hash(k * 7 + 3) * 0.6;
+        ctx.fillStyle = `rgba(255,255,255,${sa})`;
+        ctx.fillRect(sx2, sy2, 1.4, 1.4);
+      }
+    }
   }
 
-  function drawMountains(w, h, horizonY, camZ, camX, layer) {
+  function drawMountains(w, h, horizonY, camZ, camX, layer, dusk) {
     const base = layer === 0 ? 66 : 40;
     const amp = layer === 0 ? 34 : 22;
     const speed = layer === 0 ? 0.05 : 0.11;
@@ -103,7 +114,19 @@ export function createRenderer(canvas) {
     // A vertical gradient (light crest, darker base) gives the range
     // volume instead of one flat fill.
     const mg = ctx.createLinearGradient(0, horizonY - 120, 0, horizonY + 2);
-    if (layer === 0) {
+    if (dusk) {
+      // At dusk the ridge is a dark silhouette against the orange
+      // horizon, not a pale blue wave: the day-lit colours wash out
+      // against the violet sky (the land shot's ridge read as a pale
+      // curtain, not mountains).
+      if (layer === 0) {
+        mg.addColorStop(0, 'rgba(108,96,150,0.85)');
+        mg.addColorStop(1, 'rgba(74,64,116,0.7)');
+      } else {
+        mg.addColorStop(0, 'rgba(88,78,128,0.8)');
+        mg.addColorStop(1, 'rgba(62,54,100,0.68)');
+      }
+    } else if (layer === 0) {
       mg.addColorStop(0, 'rgba(172,192,214,0.8)');
       mg.addColorStop(1, 'rgba(110,136,162,0.62)');
     } else {
@@ -115,7 +138,12 @@ export function createRenderer(canvas) {
     const ridge = [];
     for (let x = 0; x <= w; x += 16) {
       const wx = x + camZ * speed * 10 - camX * (layer === 0 ? 2 : 5);
-      const y = horizonY - base - amp * Math.abs(Math.sin(wx * 0.004) * 0.7 + Math.sin(wx * 0.011 + 2) * 0.5) - amp * 0.4 * Math.sin(wx * 0.027 + 1);
+      // A higher-frequency ripple on top of the rolling wave: the old
+      // ridge was a smooth sine, so the silhouette was two gentle
+      // humps with no character. The small secondary peaks give the
+      // range a shape — and the snow line caps them, so the caps vary
+      // instead of reading as identical white pills.
+      const y = horizonY - base - amp * Math.abs(Math.sin(wx * 0.004) * 0.7 + Math.sin(wx * 0.011 + 2) * 0.5) - amp * 0.4 * Math.sin(wx * 0.027 + 1) - amp * 0.18 * Math.sin(wx * 0.055 + 4);
       ridge.push([x, y]);
     }
     ctx.beginPath();
@@ -125,8 +153,9 @@ export function createRenderer(canvas) {
     ctx.closePath();
     ctx.fill();
     // Lit ridge edge: a faint highlight along the crest so the range
-    // has a sunlit side instead of one flat fill.
-    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    // has a sunlit side instead of one flat fill. Warm at dusk — the
+    // setting sun lights the crest orange, not white.
+    ctx.strokeStyle = dusk ? 'rgba(255,190,140,0.3)' : 'rgba(255,255,255,0.25)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     for (let k = 0; k < ridge.length; k += 1) {
@@ -148,9 +177,17 @@ export function createRenderer(canvas) {
       // land shots because their lower edge was a hard horizontal line).
       const snowLine = horizonY - 95;
       const sg = ctx.createLinearGradient(0, horizonY - 125, 0, snowLine);
-      sg.addColorStop(0, 'rgba(255,255,255,0.95)');
-      sg.addColorStop(0.65, 'rgba(255,255,255,0.85)');
-      sg.addColorStop(1, 'rgba(255,255,255,0)');
+      // Warm at dusk: the sunset lights the snow, so the caps read
+      // pink-gold instead of cold white against the violet sky.
+      if (dusk) {
+        sg.addColorStop(0, 'rgba(255,214,170,0.95)');
+        sg.addColorStop(0.65, 'rgba(255,196,150,0.85)');
+        sg.addColorStop(1, 'rgba(255,190,140,0)');
+      } else {
+        sg.addColorStop(0, 'rgba(255,255,255,0.95)');
+        sg.addColorStop(0.65, 'rgba(255,255,255,0.85)');
+        sg.addColorStop(1, 'rgba(255,255,255,0)');
+      }
       ctx.fillStyle = sg;
       ctx.beginPath();
       let started = false;
@@ -467,13 +504,15 @@ export function createRenderer(canvas) {
   }
 
   function overlay(w, h, lines, accent, dy = 0) {
-    ctx.fillStyle = 'rgba(6,12,22,0.3)';
+    // Lighter than round 7's 0.3/0.82: more of the world shows through
+    // the panel, so the title shot reads as a game, not a dark card.
+    ctx.fillStyle = 'rgba(6,12,22,0.26)';
     ctx.fillRect(0, 0, w, h);
     const bw = Math.min(640, w - 60);
     const bh = 54 + lines.length * 30;
     const bx = (w - bw) / 2;
     const by = (h - bh) / 2 + dy;
-    ctx.fillStyle = 'rgba(8,18,30,0.82)';
+    ctx.fillStyle = 'rgba(8,18,30,0.76)';
     ctx.fillRect(bx, by, bw, bh);
     ctx.strokeStyle = accent;
     ctx.lineWidth = 2;
@@ -525,8 +564,8 @@ export function createRenderer(canvas) {
     const dusk = state.mission === 3 ? 1 : 0;
 
     drawSky(w, h, horizonY, state.time, dusk);
-    drawMountains(w, h, horizonY, camZ, camX, 0);
-    drawMountains(w, h, horizonY, camZ, camX, 1);
+    drawMountains(w, h, horizonY, camZ, camX, 0, dusk);
+    drawMountains(w, h, horizonY, camZ, camX, 1, dusk);
     drawHaze(w, horizonY);
 
     // Bank the world a little with the roll.
@@ -550,7 +589,12 @@ export function createRenderer(canvas) {
         const bandH = Math.abs(prevY - y) + 1.5;
         // A cross-road near the village, drawn as a full-width grey band.
         const crossRoad = !onRunway && z >= 5740 && z <= 5770;
-        const rawField = FIELDS[Math.floor(hash(i + Math.floor(camZ / SEG_LEN)) * FIELDS.length)];
+        // Field colour groups three consecutive segments: per-segment
+        // colours made every band edge a visible colour step, so the
+        // ground read as stacked stripes. Three segments (75 m) share
+        // one base colour; the patchwork still varies per band.
+        const seg = i + Math.floor(camZ / SEG_LEN);
+        const rawField = FIELDS[Math.floor(hash(Math.floor(seg / 3)) * FIELDS.length)];
         // Mute every band toward one common olive tone: the bands still
         // vary, but they stop alternating loudly enough to read as
         // stacked paint stripes. Rounds 3 and 5 dressed the stripes
@@ -564,10 +608,12 @@ export function createRenderer(canvas) {
         ctx.fillStyle = mix3(col, SKY_HORIZON, haze * 0.7);
         ctx.fillRect(-40, topY, w + 80, bandH);
         // Shade each band top-to-bottom so the ground has depth instead
-        // of reading as flat stacked paint.
+        // of reading as flat stacked paint — kept subtle, because the
+        // dark bottom of one band against the light top of the next
+        // is itself a stripe edge.
         const bg = ctx.createLinearGradient(0, topY, 0, topY + bandH);
-        bg.addColorStop(0, 'rgba(255,255,255,0.05)');
-        bg.addColorStop(1, 'rgba(0,0,0,0.10)');
+        bg.addColorStop(0, 'rgba(255,255,255,0.03)');
+        bg.addColorStop(1, 'rgba(0,0,0,0.07)');
         ctx.fillStyle = bg;
         ctx.fillRect(-40, topY, w + 80, bandH);
         // Plough furrows: short dashes across the field, so the ground
@@ -597,9 +643,12 @@ export function createRenderer(canvas) {
             ctx.fillStyle = mix3(ROAD_COL, SKY_HORIZON, haze * 0.7);
             ctx.fillRect(lx - lw / 2, topY, lw, bandH);
           }
+          // A hedgerow segment, not a frame-wide line: the old full-width
+          // 2 px line at every band top drew the stripe edges itself.
           if (hash(i * 29 + 5) < 0.35) {
+            const hx = hash(i * 31 + 11) * w * 0.6;
             ctx.fillStyle = mix3([42, 82, 46], SKY_HORIZON, haze * 0.7);
-            ctx.fillRect(-40, topY, w + 80, 2);
+            ctx.fillRect(hx, topY, w * 0.32, 2);
           }
         }
         // Field patchwork: two or three irregular plots per band, each a
@@ -672,9 +721,25 @@ export function createRenderer(canvas) {
         if (onRunway) {
           const cx = w / 2 - (camDepth * camX) / d;
           const half = (camDepth * RUNWAY.halfWidth) / d;
-          // Asphalt strip.
-          ctx.fillStyle = mix3([88, 88, 96], SKY_HORIZON, haze * 0.7);
+          // Asphalt strip — mixed toward cool grey, not the warm
+          // horizon: the warm mix turned the near runway brown, like
+          // dirt, not asphalt (the land shot's foreground slab).
+          ctx.fillStyle = mix3([88, 88, 96], [150, 158, 170], haze * 0.25);
           ctx.fillRect(cx - half, topY, half * 2, bandH);
+          // Asphalt aggregate: short subtle dashes across the strip,
+          // seeded per band, so the near asphalt has texture even where
+          // the tyre marks have diverged off-screen and the centreline
+          // is in a gap. Placed inside the VISIBLE part of the band —
+          // a tall near band runs far below the frame.
+          if (bandH > 8) {
+            const visH = Math.min(bandH, h - topY);
+            ctx.fillStyle = 'rgba(52,52,60,0.16)';
+            for (let k = 0; k < 5; k += 1) {
+              const ax = cx - half + hash(i * 97 + k * 19) * half * 2;
+              const aw = Math.min(26, Math.max(4, half * 0.06));
+              ctx.fillRect(ax, topY + visH * (0.15 + k * 0.17), aw, Math.min(6, Math.max(1.5, bandH * 0.03)));
+            }
+          }
           // Tyre marks: two dark wheel tracks down the strip, so the
           // asphalt has texture even at close range, where the strip is
           // wider than the screen and nothing else reads on it.
@@ -726,8 +791,12 @@ export function createRenderer(canvas) {
               // is wider than the screen, so an unclamped patch becomes
               // a giant dark rectangle on the foreground asphalt.
               const rw2 = Math.min(180, half * (0.2 + hash(i * 37 + k * 13) * 0.3));
+              // Height clamped in screen pixels too: on a tall near
+              // band, bandH*0.25 is over 100 px and the patch reads as
+              // a long dark slab down the foreground.
+              const ph = Math.min(bandH * 0.25, 60);
               ctx.fillStyle = 'rgba(60,60,70,0.18)';
-              ctx.fillRect(rx2, topY + bandH * (0.2 + k * 0.4), rw2, bandH * 0.25);
+              ctx.fillRect(rx2, topY + bandH * (0.2 + k * 0.4), rw2, ph);
             }
           }
           // Threshold bars at the start of the strip: eight white bars
@@ -746,9 +815,10 @@ export function createRenderer(canvas) {
           const shoulderW = Math.max(2, (camDepth * 10) / d);
           ctx.fillStyle = mix3([126, 162, 100], SKY_HORIZON, haze * 0.7);
           ctx.fillRect(cx - half - shoulderW, topY, shoulderW, bandH);
-          // Taxiway beside the strip, and amber edge lights down both sides.
+          // Taxiway beside the strip — cool grey like the asphalt, not
+          // the warm horizon mix (it read brown next to the strip).
           const taxiW = Math.max(2, (camDepth * 12) / d);
-          ctx.fillStyle = mix3([70, 70, 78], SKY_HORIZON, haze * 0.7);
+          ctx.fillStyle = mix3([70, 70, 78], [130, 138, 150], haze * 0.25);
           ctx.fillRect(cx + half, topY, taxiW, bandH);
           const midY = (y + prevY) / 2;
           const lr = Math.min(6, Math.max(1, half * 0.05));
@@ -1114,7 +1184,9 @@ export function createRenderer(canvas) {
         ctx.globalAlpha = wm.alpha;
         ctx.translate(sx, sy);
         ctx.rotate(wm.roll);
-        const ws = 0.3 * (Math.min(w, h) / 720);
+        // A touch bigger than round 7: at 0.3 she read as a red cross,
+        // not a plane, in the play shot.
+        const ws = 0.36 * (Math.min(w, h) / 720);
         ctx.scale(ws, ws);
         ctx.fillStyle = '#c23b2e';
         ctx.beginPath();
