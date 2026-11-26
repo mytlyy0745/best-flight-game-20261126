@@ -139,7 +139,20 @@ export function flyUntil(world, stop, maxSeconds = 240) {
 export function stageShot(name, world) {
   world.reset();
   if (name !== 'play' && name !== 'drop' && name !== 'land' && name !== 'win') {
-    for (let i = 0; i < START_SECONDS / STEP; i += 1) world.step(STEP, null, true);
+    // Title: fly the autopilot at the first ring until it sits
+    // 150–250 m ahead, centred in frame below the panel. The old
+    // 5 s attract weave left the plane crabbed ~22° off course, so
+    // the first ring hung off-centre at the frame edge like a stray
+    // circle. The live title keeps its weave (main.js steps it with
+    // null input); this is the staged frame only. No ring is
+    // threaded inside the window, so the banner still reads RINGS
+    // 0/12, score 0 — the same game, framed head-on.
+    flyUntil(world, (s) => {
+      const r = world.nextRing();
+      if (!r) return false;
+      const d = r.z - s.z;
+      return d <= 250 && d >= 150;
+    }, 10);
     return { screen: SCREEN_TITLE, best: 0 };
   }
   if (name === 'play') {

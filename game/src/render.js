@@ -367,12 +367,22 @@ export function createRenderer(canvas) {
     ctx.fillRect(-13, 8, 26, 5);
     ctx.fillStyle = '#c23b2e';
     ctx.fillRect(-13, 15, 26, 2);
-    // Nav lights, blinking.
-    if (Math.floor(time * 2) % 2 === 0) {
-      ctx.fillStyle = '#ff4444';
-      ctx.beginPath(); ctx.arc(-118, 12, 3.5, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#44ff77';
-      ctx.beginPath(); ctx.arc(118, 12, 3.5, 0, Math.PI * 2); ctx.fill();
+    // Nav lights, steady on with a soft glow: the old 1 Hz blink was
+    // off half the time, so in a still screenshot the wingtips read
+    // as bare. Red port, green starboard, always lit — they pop
+    // against the dusk sky on the landing shot too.
+    for (const [lx, col] of [[-118, '255,68,68'], [118, '68,255,119']]) {
+      ctx.fillStyle = `rgba(${col},0.25)`;
+      ctx.beginPath(); ctx.arc(lx, 12, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = `rgb(${col})`;
+      ctx.beginPath(); ctx.arc(lx, 12, 3.5, 0, Math.PI * 2); ctx.fill();
+    }
+    // Tail strobe: a white double-flash once a second, so the plane
+    // still blinks in motion without ever going dark in a still.
+    const ph = time % 1;
+    if (ph < 0.07 || (ph > 0.14 && ph < 0.21)) {
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.beginPath(); ctx.arc(0, -80, 3, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
   }
@@ -864,8 +874,13 @@ export function createRenderer(canvas) {
             ctx.fillStyle = 'rgba(52,52,60,0.4)';
             for (let k = 0; k < aggCount; k += 1) {
               const ax = stripL + hash(i * 97 + k * 19) * stripW;
-              const aw = Math.min(80, Math.max(8, half * 0.09));
-              ctx.fillRect(ax, topY + visH * ((k + 0.5) / aggCount), aw, Math.min(12, Math.max(2.5, visH * 0.05)));
+              // Size and row jittered per dash (fresh hash salts), so
+              // the aggregate reads as speckle, not an even grid of
+              // identical dark rectangles on the foreground asphalt.
+              const aw = Math.min(80, Math.max(8, half * 0.09 * (0.5 + hash(i * 97 + k * 19 + 7))));
+              const ah = Math.min(12, Math.max(2.5, visH * 0.05 * (0.6 + hash(i * 97 + k * 19 + 11))));
+              const ay = topY + visH * ((k + 0.5 + (hash(i * 97 + k * 19 + 13) - 0.5) * 0.7) / aggCount);
+              ctx.fillRect(ax, ay, aw, ah);
             }
             // Pale aggregate: a second, lighter pass — asphalt is not
             // one tone, and the pale flecks stop the dark dashes
@@ -874,8 +889,10 @@ export function createRenderer(canvas) {
             ctx.fillStyle = 'rgba(210,214,222,0.16)';
             for (let k = 0; k < paleCount; k += 1) {
               const px = stripL + hash(i * 89 + k * 23 + 3) * stripW;
-              const pw = Math.min(70, Math.max(8, half * 0.08));
-              ctx.fillRect(px, topY + visH * ((k + 0.3) / paleCount), pw, Math.min(10, Math.max(2.5, visH * 0.04)));
+              const pw = Math.min(70, Math.max(8, half * 0.08 * (0.5 + hash(i * 89 + k * 23 + 5))));
+              const ph2 = Math.min(10, Math.max(2.5, visH * 0.04 * (0.6 + hash(i * 89 + k * 23 + 9))));
+              const py = topY + visH * ((k + 0.3 + (hash(i * 89 + k * 23 + 15) - 0.5) * 0.7) / paleCount);
+              ctx.fillRect(px, py, pw, ph2);
             }
           }
           // Tyre marks: two dark wheel tracks down the strip, so the
@@ -946,6 +963,40 @@ export function createRenderer(canvas) {
               const bx0 = cx - half + ((b + 0.15) / bars) * half * 2;
               const bw = (half * 2 * 0.7) / bars;
               ctx.fillRect(bx0, topY, bw, bandH);
+            }
+          }
+          // Touchdown-zone bars: pairs of bold white bars either side
+          // of the centreline at 150 m intervals past the threshold,
+          // the 300 m pair fatter as the aiming point — the markings
+          // that make the near strip read as a runway, not a grey road.
+          // A pair lands in exactly one band (zm is the centre of its
+          // 25 m slice), so it draws at that band's full height.
+          // The window is ±13, not ±12: band centres are 25 m apart,
+          // so a marking can sit 12.5 m from the nearest two — with
+          // ±12 it drew in NO band at all (the aiming point was
+          // missing from the first land shot), and with ±13 it draws
+          // in one band, or two when it lands exactly between them
+          // (a slightly longer bar, which still reads as a marking).
+          // Gated to d > 50 and clamped: at a few metres out the
+          // world-space width explodes (a 5 m bar is ~190 px wide at
+          // d = 12) and the pair under the nose becomes a giant white
+          // slab across the foreground — the first version did exactly
+          // that on the land shot. The 150 m pair is under the plane
+          // on short final anyway; the aiming point is the one that
+          // reads.
+          if (d > 50) {
+            for (const bar of [
+              { z: RUNWAY.z0 + 150, w: 5, off: 8 },
+              { z: RUNWAY.z0 + 300, w: 7, off: 9 },
+              { z: RUNWAY.z0 + 450, w: 5, off: 8 },
+            ]) {
+              if (Math.abs(zm - bar.z) <= 13) {
+                const bw = Math.min(24, Math.max(2, (camDepth * bar.w) / d));
+                const bo = Math.min(90, (camDepth * bar.off) / d);
+                ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                ctx.fillRect(cx - bo - bw, topY, bw, bandH);
+                ctx.fillRect(cx + bo, topY, bw, bandH);
+              }
             }
           }
           // Mown grass shoulder on the left of the strip, lighter than
@@ -1350,13 +1401,21 @@ export function createRenderer(canvas) {
         ctx.translate(sx, sy);
         ctx.rotate(wm.roll);
         // A touch bigger again: at 0.36 she still read as a small red
-        // cross in the play shot, not a plane in formation.
-        const ws = 0.42 * (Math.min(w, h) / 720);
+        // cross in the play shot, not a plane in formation — and at
+        // 0.42 the red wings were a solid bar. Cream insets like the
+        // hero's break the bar into wings, and the fin flash gives her
+        // a tail to read.
+        const ws = 0.5 * (Math.min(w, h) / 720);
         ctx.scale(ws, ws);
         ctx.fillStyle = '#c23b2e';
         ctx.beginPath();
         ctx.moveTo(-118, 6); ctx.lineTo(-16, -8); ctx.lineTo(-14, 8); ctx.lineTo(-112, 22); ctx.closePath();
         ctx.moveTo(118, 6); ctx.lineTo(16, -8); ctx.lineTo(14, 8); ctx.lineTo(112, 22); ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#e8e4da';
+        ctx.beginPath();
+        ctx.moveTo(-112, 10); ctx.lineTo(-16, -2); ctx.lineTo(-14, 6); ctx.lineTo(-108, 20); ctx.closePath();
+        ctx.moveTo(112, 10); ctx.lineTo(16, -2); ctx.lineTo(14, 6); ctx.lineTo(108, 20); ctx.closePath();
         ctx.fill();
         ctx.fillStyle = '#e8e4da';
         ctx.beginPath();
@@ -1369,6 +1428,10 @@ export function createRenderer(canvas) {
         ctx.fillStyle = '#c23b2e';
         ctx.beginPath();
         ctx.moveTo(-4, -50); ctx.lineTo(-3, -78); ctx.lineTo(5, -78); ctx.lineTo(6, -50); ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#f4f0e4';
+        ctx.beginPath();
+        ctx.moveTo(-3, -62); ctx.lineTo(4, -62); ctx.lineTo(4, -70); ctx.lineTo(-3, -70); ctx.closePath();
         ctx.fill();
         ctx.fillStyle = 'rgba(255,255,255,0.35)';
         ctx.beginPath();
