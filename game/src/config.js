@@ -29,6 +29,16 @@ export const CRATES = 6;
 export const RUNWAY = { z0: 6000, z1: 6600, halfWidth: 18 };
 export const MISSION_Z = { ringsEnd: 3100, zonesEnd: 5500 };
 
+// Fun — golden rings and the balloon: risk and reward in the ring run.
+// Two of the 12 rings are golden: smaller, harder to thread, worth more.
+// A hot-air balloon drifts over the valley; buzzing it pays a bonus.
+export const GOLDEN_RING_COUNT = 2;
+export const GOLDEN_RING_RADIUS = 24; // smaller than a normal ring (30), but inside what the autopilot reliably threads (worst observed crossing error 21 m)
+export const SCORE_GOLDEN_RING = 250;
+export const SCORE_BALLOON_BUZZ = 150;
+export const BALLOON_BUZZ_DIST = 45;
+export const RING_BURST_TIME = 0.8; // seconds a hit ring keeps sparkling
+
 // Scoring.
 export const SCORE_RING = 100;
 export const SCORE_STREAK = 25;
@@ -68,7 +78,7 @@ export const MISSIONS = [
   {
     id: 1,
     name: 'RING RUN',
-    brief: 'Fly through all 12 rings. Throttle with Shift / Ctrl, steer with the arrow keys or WASD. A ring pays 100, streaks pay extra, dead-centre hits pay more.',
+    brief: 'Fly through all 12 rings. Two are GOLDEN — smaller, worth 250. A balloon drifts over the valley: buzz it for +150. Throttle with Shift / Ctrl, steer with the arrow keys or WASD. Rings pay 100, streaks pay extra, dead-centre hits pay more.',
     goal: 'Fly through 12 rings',
   },
   {

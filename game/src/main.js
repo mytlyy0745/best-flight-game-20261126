@@ -8,7 +8,7 @@
 // window.__shotReady for a screenshot.
 import { BEST_KEY, STEP, MISSIONS } from './config.js';
 import { createRandom } from './random.js';
-import { createWorld, EVENT_RING, EVENT_ZONE, EVENT_LANDED, EVENT_MISSION_DONE, EVENT_DROP } from './world.js';
+import { createWorld, EVENT_RING, EVENT_ZONE, EVENT_LANDED, EVENT_MISSION_DONE, EVENT_DROP, EVENT_BALLOON } from './world.js';
 import { ACTION_CONFIRM, ACTION_PAUSE, ACTION_MUTE, createInput } from './input.js';
 import { createAudio } from './audio.js';
 import { createRenderer, SCREEN_TITLE, SCREEN_BRIEF, SCREEN_PLAY, SCREEN_PAUSED, SCREEN_FAIL, SCREEN_MISSION_DONE, SCREEN_WIN } from './render.js';
@@ -126,9 +126,10 @@ function runGame() {
   function step() {
     const events = world.step(STEP, input.read(STEP), false);
     audio.engine(world.state.throttle, screen === SCREEN_PLAY);
-    if (events & EVENT_RING) audio.ring();
+    if (events & EVENT_RING) audio.ring(world.state.streak);
     if (events & EVENT_ZONE) audio.zone();
     if (events & EVENT_DROP) audio.drop();
+    if (events & EVENT_BALLOON) audio.balloon();
     if (events & EVENT_LANDED) {
       audio.land();
       endGame(true);

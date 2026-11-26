@@ -11,6 +11,8 @@ import {
   SCORE_PERFECT_RINGS, SCORE_PERFECT_ZONES, SCORE_TIME_RINGS,
   SCORE_TIME_ZONES, SCORE_TIME_LAND, TIME_PAR_RINGS, TIME_PAR_ZONES,
   TIME_PAR_LAND, SCORE_GREASED, LAND_GREASED_VS,
+  GOLDEN_RING_COUNT, GOLDEN_RING_RADIUS, SCORE_GOLDEN_RING,
+  SCORE_BALLOON_BUZZ, BALLOON_BUZZ_DIST,
 } from './config.js';
 import { createRandom, makeNoise } from './random.js';
 
@@ -21,6 +23,7 @@ export const EVENT_LANDED = 8;
 export const EVENT_FUEL_EMPTY = 16;
 export const EVENT_MISSION_DONE = 32;
 export const EVENT_DROP = 64;
+export const EVENT_BALLOON = 128;
 
 function clamp(v, lo, hi) {
   return v < lo ? lo : v > hi ? hi : v;
@@ -33,6 +36,13 @@ function buildCourse(rand) {
   const rings = [];
   let x = 0;
   let alt = 150;
+  // Two golden rings, seeded, mid-course (never the first ring): smaller,
+  // harder to thread, worth 250 instead of 100. The plane can reach them
+  // from the ring before — the challenge is precision, not luck.
+  const goldenIdx = new Set();
+  while (goldenIdx.size < GOLDEN_RING_COUNT) {
+    goldenIdx.add(2 + Math.floor(rand() * (RING_COUNT - 3)));
+  }
   for (let i = 0; i < RING_COUNT; i += 1) {
     const z = 350 + i * 240;
     // Steps stay inside what the plane can reach from the last ring
@@ -40,7 +50,8 @@ function buildCourse(rand) {
     // hittable by a well-flown run — the challenge is precision, not luck.
     x = clamp(x + (rand() * 2 - 1) * 70, -170, 170);
     alt = clamp(alt + (rand() * 2 - 1) * 35, 80, 260);
-    rings.push({ z, x, alt, r: RING_RADIUS, hit: false, passed: false });
+    const golden = goldenIdx.has(i);
+    rings.push({ z, x, alt, r: golden ? GOLDEN_RING_RADIUS : RING_RADIUS, hit: false, passed: false, golden, hitT: -1 });
   }
   const zones = [];
   // The first zone sits near where the ring run ended, so the drop run
@@ -99,6 +110,41 @@ export function createWorld(rand) {
   }
   const windsock = { z: 6060, x: -30 };
   const hangar = { z: 6180, x: 55, s: 1 };
+  // A hot-air balloon drifts over the valley during the ring run: a
+  // surprise to spot, and buzzing it pays a bonus. It sways gently with
+  // time (deterministic — a function of state.time, so replays match).
+  const balloon = {
+    z: 900 + rand() * 1600,
+    x: (rand() < 0.5 ? -1 : 1) * (80 + rand() * 60),
+    alt: 120 + rand() * 80,
+  };
+  // A flock of birds crosses the valley: five birds drifting across the
+  // track, flapping as they go. Pure life — they never hurt the plane,
+  // but flying through the flock is a thrill worth watching for.
+  const birds = {
+    z: 1500 + rand() * 1200,
+    baseX: (rand() < 0.5 ? -1 : 1) * 220,
+    alt: 140 + rand() * 60,
+    count: 5,
+  };
+  // Balloon position at a given moment: slow sway, deterministic.
+  function balloonAt(time) {
+    return { z: balloon.z, x: balloon.x + 18 * Math.sin(time * 0.05), alt: balloon.alt + 4 * Math.sin(time * 0.11) };
+  }
+  // Bird positions at a given moment: the flock drifts across the track
+  // and each bird bobs as it flaps. Deterministic in time.
+  function birdsAt(time) {
+    const out = [];
+    for (let i = 0; i < birds.count; i += 1) {
+      out.push({
+        z: birds.z + i * 14,
+        x: birds.baseX + 130 * Math.sin(time * 0.1 + i * 0.9),
+        alt: birds.alt + 6 * Math.sin(time * 0.7 + i * 1.3),
+        flap: Math.sin(time * 6 + i * 1.7),
+      });
+    }
+    return out;
+  }
 
   // Ground height at distance z: rolling hills that flatten into the
   // runway approach, then dead flat along the strip itself.
@@ -144,36 +190,42 @@ export function createWorld(rand) {
       cratesFalling: [], // {z, x, alt, vz}
       message: '',
       messageT: 0,
+      balloonBuzzed: false, // the balloon bonus pays once per flight
+      maxCombo: 0, // best ring/zone streak in this flight
       _fuelWarned: false,
     };
   }
 
   function reset() {
     Object.assign(state, freshState());
-    for (const r of course.rings) { r.hit = false; r.passed = false; }
+    for (const r of course.rings) { r.hit = false; r.passed = false; r.hitT = -1; }
     for (const zn of course.zones) { zn.hit = false; zn.passed = false; }
   }
 
   // Restart one mission after a crash, keeping what earlier missions banked.
   // Rings and zones already finished stay finished; fuel and crates refill.
   function retryMission(mission) {
-    const savedRings = course.rings.map((r) => ({ hit: r.hit, passed: r.passed }));
+    const savedRings = course.rings.map((r) => ({ hit: r.hit, passed: r.passed, hitT: r.hitT }));
     const savedZones = course.zones.map((zn) => ({ hit: zn.hit, passed: zn.passed }));
     const banked = state.banked;
     const ringsHit = state.ringsHit;
     const zonesHit = state.zonesHit;
+    const balloonBuzzed = state.balloonBuzzed;
+    const maxCombo = state.maxCombo;
     reset();
     state.banked = banked;
     state.score = banked;
     state.ringsHit = ringsHit;
     state.zonesHit = zonesHit;
+    state.balloonBuzzed = balloonBuzzed;
+    state.maxCombo = maxCombo;
     state.mission = mission;
     state.missionStart = state.time;
     state.z = mission === 2 ? MISSION_Z.ringsEnd : mission === 3 ? MISSION_Z.zonesEnd : 0;
     state.alt = 160;
     state.speed = 70;
     if (mission >= 2) {
-      course.rings.forEach((r, i) => { r.hit = savedRings[i].hit; r.passed = true; });
+      course.rings.forEach((r, i) => { r.hit = savedRings[i].hit; r.passed = true; r.hitT = savedRings[i].hitT; });
     }
     if (mission >= 3) {
       course.zones.forEach((zn, i) => { zn.hit = savedZones[i].hit; zn.passed = savedZones[i].passed; });
@@ -293,6 +345,7 @@ export function createWorld(rand) {
           // Consecutive zones pay more each time: 250, 300, 350, 400, 450.
           const pts = SCORE_ZONE + SCORE_ZONE_STREAK * state.zoneStreak;
           state.zoneStreak += 1;
+          state.maxCombo = Math.max(state.maxCombo, state.zoneStreak);
           state.score += pts;
           state.scoreParts.zones += pts;
           events |= EVENT_ZONE;
@@ -331,9 +384,13 @@ export function createWorld(rand) {
           const dy = state.alt - r.alt;
           if (Math.hypot(dx, dy) < r.r) {
             r.hit = true;
+            r.hitT = state.time;
             state.ringsHit += 1;
             state.streak += 1;
-            let pts = SCORE_RING + SCORE_STREAK * (state.streak - 1);
+            state.maxCombo = Math.max(state.maxCombo, state.streak);
+            // A golden ring pays 250 instead of 100 — smaller, harder,
+            // worth going for. Streak and precision still stack on top.
+            let pts = (r.golden ? SCORE_GOLDEN_RING : SCORE_RING) + SCORE_STREAK * (state.streak - 1);
             // Dead centre through the ring pays a precision bonus.
             const precise = Math.hypot(dx, dy) < RING_PRECISION_DIST;
             if (precise) {
@@ -343,10 +400,24 @@ export function createWorld(rand) {
             state.score += pts;
             state.scoreParts.rings += pts - (precise ? SCORE_RING_PRECISION : 0);
             events |= EVENT_RING;
-            say(`RING ${state.ringsHit}/${RING_COUNT} +${pts}${precise ? ' — DEAD CENTRE' : ''}`);
+            say(`${r.golden ? 'GOLDEN RING' : `RING ${state.ringsHit}/${RING_COUNT}`} +${pts}${precise ? ' — DEAD CENTRE' : ''}`);
           } else {
             state.streak = 0;
           }
+        }
+      }
+      // Balloon buzz: fly close to the drifting balloon once per flight.
+      if (!state.balloonBuzzed) {
+        const bp = balloonAt(state.time);
+        const bdx = state.x - bp.x;
+        const bdy = state.alt - bp.alt;
+        const bdz = state.z - bp.z;
+        if (Math.hypot(bdx, bdy, bdz) < BALLOON_BUZZ_DIST) {
+          state.balloonBuzzed = true;
+          state.score += SCORE_BALLOON_BUZZ;
+          state.scoreParts.bonus += SCORE_BALLOON_BUZZ;
+          events |= EVENT_BALLOON;
+          say(`BALLOON BUZZ +${SCORE_BALLOON_BUZZ}`);
         }
       }
       if (state.z >= MISSION_Z.ringsEnd) {
@@ -426,6 +497,10 @@ export function createWorld(rand) {
     houses,
     windsock,
     hangar,
+    balloon,
+    birds,
+    balloonAt,
+    birdsAt,
     riverX,
     groundAt,
     reset,

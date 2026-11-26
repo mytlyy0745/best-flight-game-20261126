@@ -58,7 +58,20 @@ export function createAudio() {
       engineGain.gain.value = flying ? 0.03 + throttle * 0.05 : 0;
       if (engineOsc) engineOsc.frequency.value = 48 + throttle * 55;
     },
-    ring() { tone(880, 0.25, 'sine', 0.16); tone(1318, 0.35, 'sine', 0.12, 0.07); },
+    ring(streak = 0) {
+      // The chime climbs with the streak: each consecutive ring rings a
+      // little higher, so a hot streak sounds hot.
+      const lift = 1 + Math.min(streak, 8) * 0.06;
+      tone(880 * lift, 0.25, 'sine', 0.16);
+      tone(1318 * lift, 0.35, 'sine', 0.12, 0.07);
+      if (streak >= 4) tone(1760 * lift, 0.3, 'sine', 0.1, 0.14);
+    },
+    balloon() {
+      // A happy little arpeggio for buzzing the balloon.
+      tone(784, 0.15, 'sine', 0.15);
+      tone(988, 0.15, 'sine', 0.15, 0.1);
+      tone(1175, 0.3, 'sine', 0.15, 0.2);
+    },
     zone() { tone(659, 0.2, 'sine', 0.15); tone(988, 0.3, 'sine', 0.13, 0.08); },
     drop() { tone(220, 0.12, 'triangle', 0.12); },
     crash() {

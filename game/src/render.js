@@ -55,27 +55,32 @@ export function createRenderer(canvas) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  function drawSky(w, h, horizonY, time) {
+  function drawSky(w, h, horizonY, time, dusk) {
+    // Dusk (mission 3, the day ending as she comes home): the sky cools
+    // to violet up top and warms to deep orange at the horizon, and the
+    // sun sinks toward the strip.
+    const top = dusk ? [58, 66, 138] : SKY_TOP;
+    const horizon = dusk ? [255, 166, 88] : SKY_HORIZON;
     const g = ctx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, `rgb(${SKY_TOP[0]},${SKY_TOP[1]},${SKY_TOP[2]})`);
-    g.addColorStop(0.55, `rgb(120,164,205)`);
-    g.addColorStop(0.72, `rgb(${SKY_HORIZON[0]},${SKY_HORIZON[1]},${SKY_HORIZON[2]})`);
-    g.addColorStop(0.73, `rgb(140,170,150)`);
-    g.addColorStop(1, `rgb(90,120,80)`);
+    g.addColorStop(0, `rgb(${top[0]},${top[1]},${top[2]})`);
+    g.addColorStop(0.55, dusk ? `rgb(122,110,168)` : `rgb(120,164,205)`);
+    g.addColorStop(0.72, `rgb(${horizon[0]},${horizon[1]},${horizon[2]})`);
+    g.addColorStop(0.73, dusk ? `rgb(150,130,120)` : `rgb(140,170,150)`);
+    g.addColorStop(1, dusk ? `rgb(96,84,80)` : `rgb(90,120,80)`);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
-    // Sun with a soft glow, upper right.
+    // Sun with a soft glow, upper right — lower and warmer at dusk.
     const sx = w * 0.78;
-    const sy = horizonY - h * 0.22;
-    const glow = ctx.createRadialGradient(sx, sy, 4, sx, sy, 90);
-    glow.addColorStop(0, 'rgba(255,244,200,0.95)');
-    glow.addColorStop(0.25, 'rgba(255,220,140,0.55)');
-    glow.addColorStop(1, 'rgba(255,220,140,0)');
+    const sy = horizonY - h * (dusk ? 0.09 : 0.22);
+    const glow = ctx.createRadialGradient(sx, sy, 4, sx, sy, dusk ? 130 : 90);
+    glow.addColorStop(0, dusk ? 'rgba(255,214,150,0.95)' : 'rgba(255,244,200,0.95)');
+    glow.addColorStop(0.25, dusk ? 'rgba(255,170,90,0.6)' : 'rgba(255,220,140,0.55)');
+    glow.addColorStop(1, dusk ? 'rgba(255,170,90,0)' : 'rgba(255,220,140,0)');
     ctx.fillStyle = glow;
-    ctx.fillRect(sx - 95, sy - 95, 190, 190);
-    ctx.fillStyle = '#fff6d8';
+    ctx.fillRect(sx - 135, sy - 135, 270, 270);
+    ctx.fillStyle = dusk ? '#ffe0a8' : '#fff6d8';
     ctx.beginPath();
-    ctx.arc(sx, sy, 22, 0, Math.PI * 2);
+    ctx.arc(sx, sy, dusk ? 26 : 22, 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -312,6 +317,22 @@ export function createRenderer(canvas) {
     ctx.fillStyle = 'rgba(191,239,255,0.75)';
     ctx.fillText('SCORE', w / 2, 76);
     ctx.textAlign = 'left';
+    // Combo meter: the current ring/zone streak, shown once it is worth
+    // bragging about. It climbs gold as the streak builds — the number
+    // a player chases after the first few rings.
+    const combo = mission === 1 ? world.state.streak : mission === 2 ? world.state.zoneStreak : 0;
+    if (combo >= 2) {
+      const ccol = combo >= 6 ? '#ff9a3c' : combo >= 4 ? '#ffd166' : '#ffe9a8';
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 15px ui-monospace, Menlo, monospace';
+      const clabel = `COMBO x${combo}`;
+      const ctw = ctx.measureText(clabel).width;
+      ctx.fillStyle = 'rgba(8,18,30,0.6)';
+      ctx.fillRect(w / 2 - ctw / 2 - 10, 100, ctw + 20, 22);
+      ctx.fillStyle = ccol;
+      ctx.fillText(clabel, w / 2, 105);
+      ctx.textAlign = 'left';
+    }
     // Compass strip, bottom centre.
     const cw = 360;
     const cx0 = w / 2 - cw / 2;
@@ -407,8 +428,10 @@ export function createRenderer(canvas) {
     const camAlt = state.alt;
     const camDepth = (h / 2) / 0.767;
     const horizonY = h * 0.42 + state.pitch * 90;
+    // Dusk settles in for the landing: the day ends as she comes home.
+    const dusk = state.mission === 3 ? 1 : 0;
 
-    drawSky(w, h, horizonY, state.time);
+    drawSky(w, h, horizonY, state.time, dusk);
     drawMountains(w, h, horizonY, camZ, camX, 0);
     drawMountains(w, h, horizonY, camZ, camX, 1);
     drawHaze(w, horizonY);
@@ -645,6 +668,17 @@ export function createRenderer(canvas) {
       const d = c.z - camZ;
       if (d > 5 && d < VIEW_DIST) drawables.push({ d, kind: 'crate', o: c });
     }
+    // The balloon drifts over the valley (mission 1 airspace), and the
+    // bird flock crosses the track — both seeded, both alive in the frame.
+    {
+      const bp = world.balloonAt(state.time);
+      const d = bp.z - camZ;
+      if (state.mission === 1 && d > 20 && d < VIEW_DIST) drawables.push({ d, kind: 'balloon', o: bp });
+    }
+    for (const b of world.birdsAt(state.time)) {
+      const d = b.z - camZ;
+      if (d > 20 && d < VIEW_DIST) drawables.push({ d, kind: 'bird', o: b });
+    }
     drawables.sort((a, b) => b.d - a.d);
     for (const item of drawables) {
       const { d } = item;
@@ -803,7 +837,9 @@ export function createRenderer(canvas) {
         const sy = horizonY + (camDepth * (camAlt - r.alt)) / d;
         const rr = (camDepth * r.r) / d;
         if (rr < 3 || sx < -rr || sx > w + rr) continue;
-        const col = r.hit ? '#50ff8c' : r.passed ? 'rgba(255,90,78,0.55)' : '#ffc93c';
+        // Golden rings read gold, not yellow, and they sparkle — the
+        // player should spot the 250-pointer a long way off.
+        const col = r.hit ? '#50ff8c' : r.passed ? 'rgba(255,90,78,0.55)' : r.golden ? '#ffb020' : '#ffc93c';
         ctx.lineWidth = Math.max(2, rr * 0.14);
         ctx.strokeStyle = col;
         ctx.beginPath();
@@ -814,6 +850,49 @@ export function createRenderer(canvas) {
         ctx.beginPath();
         ctx.ellipse(sx, sy, rr * 0.86, rr * 0.8, 0, 0, Math.PI * 2);
         ctx.stroke();
+        if (r.golden && !r.hit && !r.passed) {
+          // Twinkling four-point sparkles around the golden ring.
+          ctx.fillStyle = `rgba(255,230,150,${0.5 + 0.4 * Math.sin(state.time * 5 + r.z)})`;
+          for (let k = 0; k < 4; k += 1) {
+            const a = (k * Math.PI) / 2 + state.time * 0.4;
+            const spx = sx + Math.cos(a) * rr * 1.25;
+            const spy = sy + Math.sin(a) * rr * 1.25;
+            const ss = Math.max(2, rr * 0.09);
+            ctx.beginPath();
+            ctx.moveTo(spx, spy - ss);
+            ctx.lineTo(spx + ss * 0.3, spy - ss * 0.3);
+            ctx.lineTo(spx + ss, spy);
+            ctx.lineTo(spx + ss * 0.3, spy + ss * 0.3);
+            ctx.lineTo(spx, spy + ss);
+            ctx.lineTo(spx - ss * 0.3, spy + ss * 0.3);
+            ctx.lineTo(spx - ss, spy);
+            ctx.lineTo(spx - ss * 0.3, spy - ss * 0.3);
+            ctx.closePath();
+            ctx.fill();
+          }
+        }
+        // Hit burst: for a moment after threading a ring, an expanding
+        // golden ripple and sparkles bloom off it — the payoff you feel.
+        if (r.hit && r.hitT >= 0) {
+          const bt = (state.time - r.hitT) / 0.8;
+          if (bt < 1) {
+            const br = rr * (1 + bt * 1.1);
+            ctx.strokeStyle = `rgba(255,210,90,${0.85 * (1 - bt)})`;
+            ctx.lineWidth = Math.max(2, rr * 0.12 * (1 - bt));
+            ctx.beginPath();
+            ctx.ellipse(sx, sy, br, br * 0.94, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = `rgba(255,230,150,${0.9 * (1 - bt)})`;
+            for (let k = 0; k < 6; k += 1) {
+              const a = (k * Math.PI) / 3 + 0.5;
+              const spx = sx + Math.cos(a) * rr * (1 + bt * 0.9);
+              const spy = sy + Math.sin(a) * rr * (1 + bt * 0.9);
+              ctx.beginPath();
+              ctx.arc(spx, spy, Math.max(1.5, rr * 0.06), 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        }
         // Strut down to the ground so the ring's height reads.
         const gy = horizonY + (camDepth * (camAlt - world.groundAt(r.z))) / d;
         ctx.strokeStyle = 'rgba(255,255,255,0.25)';
@@ -821,6 +900,57 @@ export function createRenderer(canvas) {
         ctx.beginPath();
         ctx.moveTo(sx, sy + rr * 0.94);
         ctx.lineTo(sx, gy);
+        ctx.stroke();
+      } else if (item.kind === 'balloon') {
+        const bp = item.o;
+        const sx = w / 2 + (camDepth * (bp.x - camX)) / d;
+        const sy = horizonY + (camDepth * (camAlt - bp.alt)) / d;
+        const s = (camDepth * 16) / d;
+        if (s < 3 || sx < -80 || sx > w + 80) continue;
+        // Striped envelope, ropes, and a little basket underneath.
+        ctx.fillStyle = '#d84a35';
+        ctx.beginPath();
+        ctx.ellipse(sx, sy, s, s * 1.15, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#f4e8c8';
+        ctx.beginPath();
+        ctx.ellipse(sx, sy, s * 0.45, s * 1.15, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#d84a35';
+        ctx.beginPath();
+        ctx.ellipse(sx, sy, s * 0.16, s * 1.15, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#5a3a22';
+        ctx.lineWidth = Math.max(1, s * 0.06);
+        ctx.beginPath();
+        ctx.moveTo(sx - s * 0.5, sy + s * 0.9);
+        ctx.lineTo(sx - s * 0.3, sy + s * 1.5);
+        ctx.moveTo(sx + s * 0.5, sy + s * 0.9);
+        ctx.lineTo(sx + s * 0.3, sy + s * 1.5);
+        ctx.stroke();
+        ctx.fillStyle = '#6b4a1a';
+        ctx.fillRect(sx - s * 0.3, sy + s * 1.5, s * 0.6, s * 0.45);
+        if (!state.balloonBuzzed) {
+          ctx.fillStyle = '#ffd166';
+          ctx.font = `bold ${Math.max(11, Math.min(18, s * 0.5))}px ui-monospace, monospace`;
+          ctx.textAlign = 'center';
+          ctx.fillText('BUZZ ME +150', sx, sy - s * 1.45);
+          ctx.textAlign = 'left';
+        }
+      } else if (item.kind === 'bird') {
+        const b = item.o;
+        const sx = w / 2 + (camDepth * (b.x - camX)) / d;
+        const sy = horizonY + (camDepth * (camAlt - b.alt)) / d;
+        const s = Math.max(2, (camDepth * 3.5) / d);
+        if (sx < -20 || sx > w + 20 || sy < 0 || sy > horizonY) continue;
+        // A flapping V: two wings that beat as the bird crosses the sky.
+        const flap = b.flap * s * 0.5;
+        ctx.strokeStyle = 'rgba(40,40,48,0.85)';
+        ctx.lineWidth = Math.max(1, s * 0.12);
+        ctx.beginPath();
+        ctx.moveTo(sx - s, sy - flap);
+        ctx.lineTo(sx, sy);
+        ctx.lineTo(sx + s, sy - flap);
         ctx.stroke();
       } else if (item.kind === 'crate') {
         const c = item.o;
@@ -919,7 +1049,7 @@ export function createRenderer(canvas) {
         'DELIVERED — ALL MISSIONS COMPLETE',
         rating,
         `Final score: ${state.score}   (best ${Math.max(best, state.score)})`,
-        `Landing bonus: +${state.landScore}`,
+        `Landing bonus: +${state.landScore}   Best combo: x${state.maxCombo}`,
         'Press Space to fly again',
       ], '#ffd166');
     }
