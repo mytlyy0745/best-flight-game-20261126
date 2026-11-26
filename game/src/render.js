@@ -259,7 +259,10 @@ export function createRenderer(canvas) {
     const scale = Math.min(w, h) / 720;
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.rotate(-state.roll * 0.85);
+    // On the title screen the plane flies level and proud: the staging
+    // flies a demo weave (roll up to ±0.5), so the hero plane read as
+    // tipping over in the title shot.
+    ctx.rotate(-(screen === SCREEN_TITLE ? 0 : state.roll) * 0.85);
     ctx.scale(scale, scale);
     // Wings (rear view, slight dihedral).
     ctx.fillStyle = '#c23b2e';
@@ -634,13 +637,32 @@ export function createRenderer(canvas) {
         ctx.fillStyle = bg;
         ctx.fillRect(-40, topY, w + 80, bandH);
         // Plough furrows: short dashes across the field, so the ground
-        // reads as worked farmland instead of flat paint.
+        // reads as worked farmland instead of flat paint. The count
+        // scales with the VISIBLE band height: the old fixed 3 dashes
+        // left the near bands — the biggest area in every shot — almost
+        // empty, because a tall band's rows sat at fractions of its
+        // full height, below the frame.
         if (!onRunway && !crossRoad && bandH > 4) {
+          const visH = Math.max(0, Math.min(bandH, h - topY));
+          const furCount = Math.min(9, 3 + Math.floor(visH / 55));
           ctx.fillStyle = mix3([60, 100, 58], SKY_HORIZON, haze * 0.7);
-          for (let k = 0; k < 3; k += 1) {
+          for (let k = 0; k < furCount; k += 1) {
             const fx = hash(i * 31 + k * 17 + 2) * w;
             const fl = w * (0.05 + hash(i * 13 + k * 7) * 0.09);
-            ctx.fillRect(fx, topY + bandH * (0.25 + k * 0.25), fl, Math.max(1, bandH * 0.12));
+            ctx.fillRect(fx, topY + visH * ((k + 0.5) / furCount), fl, Math.max(1, visH * 0.09));
+          }
+          // Field speckle: short darker marks scattered through a tall
+          // band's visible height — the foreground field texture the
+          // furrows alone could not give. Seeded per band/row, so the
+          // same band always looks the same.
+          if (bandH > 50) {
+            const speckCount = Math.min(10, Math.floor(visH / 40));
+            ctx.fillStyle = 'rgba(52,88,50,0.14)';
+            for (let k = 0; k < speckCount; k += 1) {
+              const spx = hash(i * 101 + k * 37 + 5) * w;
+              const spw = w * (0.02 + hash(i * 73 + k * 11) * 0.05);
+              ctx.fillRect(spx, topY + visH * ((k + 0.3) / speckCount), spw, Math.max(2, visH * 0.03));
+            }
           }
         }
         // The river winds across the farmland (ends before the airfield).
@@ -746,15 +768,21 @@ export function createRenderer(canvas) {
           // Asphalt aggregate: short subtle dashes across the strip,
           // seeded per band, so the near asphalt has texture even where
           // the tyre marks have diverged off-screen and the centreline
-          // is in a gap. Placed inside the VISIBLE part of the band —
-          // a tall near band runs far below the frame.
+          // is in a gap. The count scales with the VISIBLE band height
+          // and the dashes sit inside the VISIBLE strip: the old fixed
+          // 5 faint dashes, spread across the whole strip width (wider
+          // than the screen up close), vanished on the near asphalt,
+          // whose bottom half read as one flat grey slab.
           if (bandH > 8) {
-            const visH = Math.min(bandH, h - topY);
-            ctx.fillStyle = 'rgba(52,52,60,0.16)';
-            for (let k = 0; k < 5; k += 1) {
-              const ax = cx - half + hash(i * 97 + k * 19) * half * 2;
-              const aw = Math.min(26, Math.max(4, half * 0.06));
-              ctx.fillRect(ax, topY + visH * (0.15 + k * 0.17), aw, Math.min(6, Math.max(1.5, bandH * 0.03)));
+            const visH = Math.max(0, Math.min(bandH, h - topY));
+            const aggCount = Math.min(14, 5 + Math.floor(visH / 22));
+            const stripL = Math.max(cx - half, -20);
+            const stripR = Math.min(cx + half, w + 20);
+            ctx.fillStyle = 'rgba(52,52,60,0.32)';
+            for (let k = 0; k < aggCount; k += 1) {
+              const ax = stripL + hash(i * 97 + k * 19) * Math.max(1, stripR - stripL);
+              const aw = Math.min(60, Math.max(8, half * 0.09));
+              ctx.fillRect(ax, topY + visH * ((k + 0.5) / aggCount), aw, Math.min(9, Math.max(2.5, visH * 0.04)));
             }
           }
           // Tyre marks: two dark wheel tracks down the strip, so the
@@ -1249,7 +1277,7 @@ export function createRenderer(canvas) {
         // A gentle bob, deterministic in time, so the crate reads as
         // floating rather than nailed to the sky.
         const sy = horizonY + (camDepth * (camAlt - c.alt)) / d + Math.sin(state.time * 1.2 + c.z) * 2;
-        const s = Math.max(3, (camDepth * 2.2) / d);
+        const s = Math.max(3, (camDepth * 2.6) / d);
         if (sx < -80 || sx > w + 80 || sy < -60 || sy > h + 40) continue;
         if (!c.taken) {
           // A little parachute canopy over a wooden supply crate.
@@ -1278,7 +1306,10 @@ export function createRenderer(canvas) {
           ctx.strokeRect(sx - s, sy - s, s * 2, s * 2);
           ctx.fillStyle = 'rgba(255,255,255,0.85)';
           ctx.fillRect(sx - s * 0.2, sy - s, s * 0.4, s * 2);
-          if (s > 9) {
+          // The label shows out to ~300 m (s > 4): at the play-shot stop
+          // the next crate sits 220–250 m ahead, and the old threshold
+          // (s > 9, ~115 m) meant no crate ever read in the cover shot.
+          if (s > 4) {
             ctx.fillStyle = '#ffd166';
             ctx.font = `bold ${Math.max(11, Math.min(18, s * 0.5))}px ui-monospace, monospace`;
             ctx.textAlign = 'center';

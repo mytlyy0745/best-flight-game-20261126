@@ -144,12 +144,22 @@ export function stageShot(name, world) {
   }
   if (name === 'play') {
     // Mid ring-run: stop with the next ring 140–170 m ahead, big in frame
-    // but whole, the plane banked toward it, a few rings already banked.
+    // but whole, the plane banked toward it, a few rings already banked —
+    // and a sky crate in readable range when one is still ahead, so the
+    // cover shot shows the crate gameplay (round 9's honest note: no
+    // crate was visible in the staged play shot — seed 7's crates sit
+    // 970–1690 m ahead at the old stop). A crate sits 80 m past a ring,
+    // so when the next ring is 140–170 m ahead the crate past it is
+    // 220–250 m ahead — readable now the label shows past ~300 m. If
+    // the run is past the last crate ring, take the ring framing.
     flyUntil(world, (s) => {
       const r = world.nextRing();
       if (!r || s.z < 800) return false;
       const d = r.z - s.z;
-      return d <= 170 && d >= 140;
+      if (d > 170 || d < 140) return false;
+      const c = world.nextSkyCrate();
+      if (c && c.z - s.z >= 100 && c.z - s.z <= 350) return true;
+      return s.z >= 2500;
     }, 60);
     return { screen: SCREEN_PLAY, best: world.state.score };
   }
