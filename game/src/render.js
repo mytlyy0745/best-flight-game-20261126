@@ -1,7 +1,7 @@
 // Sky Courier — everything the eye sees: pseudo-3D chase view over
 // rolling terrain, the aircraft, the rings and the runway, then the HUD
 // instruments and the screen overlays. All drawing is plain 2D canvas.
-import { SEG_LEN, VIEW_DIST, RUNWAY, MISSION_Z, RING_COUNT, RATING_ACE, RATING_SKILLED } from './config.js';
+import { SEG_LEN, VIEW_DIST, RUNWAY, MISSION_Z, RING_COUNT, RATING_LEGEND, RATING_ACE, RATING_SKILLED } from './config.js';
 
 export const SCREEN_TITLE = 0;
 export const SCREEN_BRIEF = 1;
@@ -109,7 +109,6 @@ export function createRenderer(canvas) {
   }
 
   function drawClouds(w, horizonY, camZ, camX, clouds, camDepth) {
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
     for (const c of clouds) {
       const d = c.z - camZ;
       if (d < 40 || d > VIEW_DIST) continue;
@@ -120,6 +119,13 @@ export function createRenderer(canvas) {
       // Keep the top strip clear so bright clouds never sit behind the
       // mission banner and wash out its text.
       if (sy - s * 0.32 < 110) continue;
+      // Shaded underside first, so the puff reads as a volume rather
+      // than a flat white sticker.
+      ctx.fillStyle = 'rgba(178,196,222,0.75)';
+      ctx.beginPath();
+      ctx.ellipse(sx, sy + s * 0.14, s * 0.95, s * 0.28, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
       ctx.beginPath();
       ctx.ellipse(sx, sy, s, s * 0.32, 0, 0, Math.PI * 2);
       ctx.ellipse(sx - s * 0.5, sy + s * 0.08, s * 0.6, s * 0.26, 0, 0, Math.PI * 2);
@@ -305,18 +311,26 @@ export function createRenderer(canvas) {
     const target = mission === 1 ? world.nextRing() : mission === 2 ? world.nextZone() : null;
     if (target) {
       const dist = Math.max(0, Math.round(target.z - state.z));
+      const label = mission === 1 ? `NEXT RING ${dist} m` : `NEXT ZONE ${dist} m`;
       ctx.textAlign = 'center';
       ctx.font = 'bold 13px ui-monospace, Menlo, monospace';
+      const tw = ctx.measureText(label).width;
+      ctx.fillStyle = 'rgba(8,18,30,0.6)';
+      ctx.fillRect(w / 2 - tw / 2 - 8, h * 0.44 + 20, tw + 16, 20);
       ctx.fillStyle = '#ffd166';
-      ctx.fillText(mission === 1 ? `NEXT RING ${dist} m` : `NEXT ZONE ${dist} m`, w / 2, h * 0.44 + 26);
+      ctx.fillText(label, w / 2, h * 0.44 + 26);
       ctx.textAlign = 'left';
     }
     if (mission === 3 && !state.landed) {
       const dist = Math.max(0, Math.round(RUNWAY.z0 - state.z));
+      const label3 = state.z < RUNWAY.z0 ? `RUNWAY ${dist} m — SLOW DOWN, FLARE GENTLY` : 'ON THE STRIP — HOLD HER LEVEL';
       ctx.textAlign = 'center';
       ctx.font = 'bold 13px ui-monospace, Menlo, monospace';
+      const tw3 = ctx.measureText(label3).width;
+      ctx.fillStyle = 'rgba(8,18,30,0.6)';
+      ctx.fillRect(w / 2 - tw3 / 2 - 8, h * 0.44 + 20, tw3 + 16, 20);
       ctx.fillStyle = '#ffd166';
-      ctx.fillText(state.z < RUNWAY.z0 ? `RUNWAY ${dist} m — SLOW DOWN, FLARE GENTLY` : 'ON THE STRIP — HOLD HER LEVEL', w / 2, h * 0.44 + 26);
+      ctx.fillText(label3, w / 2, h * 0.44 + 26);
       ctx.textAlign = 'left';
     }
     // Flash message.
@@ -390,9 +404,29 @@ export function createRenderer(canvas) {
         // A cross-road near the village, drawn as a full-width grey band.
         const crossRoad = !onRunway && z >= 5740 && z <= 5770;
         const field = FIELDS[Math.floor(hash(i + Math.floor(camZ / SEG_LEN)) * FIELDS.length)];
-        const col = onRunway ? [96, 96, 100] : crossRoad ? ROAD_COL : field;
+        // On the airfield the band is grass; the strip itself is drawn
+        // separately below, so the runway reads as a strip in a field
+        // instead of the whole world turning grey.
+        const col = onRunway ? [104, 140, 86] : crossRoad ? ROAD_COL : field;
         ctx.fillStyle = mix3(col, SKY_HORIZON, haze * 0.7);
         ctx.fillRect(-40, topY, w + 80, bandH);
+        // Shade each band top-to-bottom so the ground has depth instead
+        // of reading as flat stacked paint.
+        const bg = ctx.createLinearGradient(0, topY, 0, topY + bandH);
+        bg.addColorStop(0, 'rgba(255,255,255,0.05)');
+        bg.addColorStop(1, 'rgba(0,0,0,0.10)');
+        ctx.fillStyle = bg;
+        ctx.fillRect(-40, topY, w + 80, bandH);
+        // Plough furrows: short dashes across the field, so the ground
+        // reads as worked farmland instead of flat paint.
+        if (!onRunway && !crossRoad && bandH > 4) {
+          ctx.fillStyle = mix3([60, 100, 58], SKY_HORIZON, haze * 0.7);
+          for (let k = 0; k < 3; k += 1) {
+            const fx = hash(i * 31 + k * 17 + 2) * w;
+            const fl = w * (0.05 + hash(i * 13 + k * 7) * 0.09);
+            ctx.fillRect(fx, topY + bandH * (0.25 + k * 0.25), fl, Math.max(1, bandH * 0.12));
+          }
+        }
         // The river winds across the farmland (ends before the airfield).
         if (!onRunway && !crossRoad && z < 5600) {
           const rx = w / 2 + (camDepth * (world.riverX(z) - camX)) / d;
@@ -421,18 +455,29 @@ export function createRenderer(canvas) {
           ctx.fillStyle = mix3([52, 96, 52], SKY_HORIZON, haze * 0.7);
           ctx.fillRect(px, topY, w * 0.22, bandH);
         }
-        // Runway centreline dashes.
+        // The runway: asphalt strip on the grass, thin dashed centreline,
+        // edge lines, taxiway and amber edge lights. Line widths are
+        // clamped — the old unclamped widths turned into giant white
+        // blocks when the camera got low over the strip.
         if (onRunway) {
           const cx = w / 2 - (camDepth * camX) / d;
           const half = (camDepth * RUNWAY.halfWidth) / d;
-          ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-          ctx.lineWidth = Math.max(1, half * 0.08);
-          ctx.beginPath();
-          ctx.moveTo(cx, y);
-          ctx.lineTo(cx, prevY);
-          ctx.stroke();
+          // Asphalt strip.
+          ctx.fillStyle = mix3([88, 88, 96], SKY_HORIZON, haze * 0.7);
+          ctx.fillRect(cx - half, topY, half * 2, bandH);
+          // Centreline dashes: 20 m of paint, 30 m of gap, in world space.
+          const zm = z - SEG_LEN / 2;
+          if ((((zm % 50) + 50) % 50) < 20) {
+            ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+            ctx.lineWidth = Math.min(4, Math.max(1, half * 0.08));
+            ctx.beginPath();
+            ctx.moveTo(cx, y);
+            ctx.lineTo(cx, prevY);
+            ctx.stroke();
+          }
+          // Edge lines, thin.
           ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-          ctx.lineWidth = Math.max(1, half * 0.06);
+          ctx.lineWidth = Math.min(3, Math.max(1, half * 0.06));
           ctx.beginPath();
           ctx.moveTo(cx - half, y);
           ctx.lineTo(cx - half, prevY);
@@ -444,7 +489,7 @@ export function createRenderer(canvas) {
           ctx.fillStyle = mix3([70, 70, 78], SKY_HORIZON, haze * 0.7);
           ctx.fillRect(cx + half, topY, taxiW, bandH);
           const midY = (y + prevY) / 2;
-          const lr = Math.max(1, half * 0.05);
+          const lr = Math.min(6, Math.max(1, half * 0.05));
           ctx.fillStyle = 'rgba(255,190,60,0.9)';
           ctx.beginPath();
           ctx.arc(cx - half, midY, lr, 0, Math.PI * 2);
@@ -499,6 +544,17 @@ export function createRenderer(canvas) {
         const gy = horizonY + (camDepth * (camAlt - world.groundAt(zn.z))) / d;
         const rx = (camDepth * zn.r) / d;
         const ry = Math.max(2, rx * 0.16);
+        // Unhit zones get a vertical light beam, so the target reads
+        // from far away instead of being a faint ellipse on the ground.
+        if (!zn.hit) {
+          const beamTop = Math.max(horizonY - 180, horizonY + (camDepth * (camAlt - (world.groundAt(zn.z) + 150))) / d);
+          const bw = Math.min(12, Math.max(2, rx * 0.18));
+          const bg2 = ctx.createLinearGradient(0, gy, 0, beamTop);
+          bg2.addColorStop(0, `rgba(255,190,60,${0.35 + 0.15 * Math.sin(state.time * 4)})`);
+          bg2.addColorStop(1, 'rgba(255,190,60,0)');
+          ctx.fillStyle = bg2;
+          ctx.fillRect(sx - bw / 2, beamTop, bw, gy - beamTop);
+        }
         ctx.fillStyle = zn.hit ? 'rgba(80,255,140,0.5)' : `rgba(255,190,60,${0.45 + 0.2 * Math.sin(state.time * 4)})`;
         ctx.beginPath();
         ctx.ellipse(sx, gy, rx, ry, 0, 0, Math.PI * 2);
@@ -722,7 +778,7 @@ export function createRenderer(canvas) {
         'Press Space for the next sortie',
       ], '#7dffa8');
     } else if (screen === SCREEN_WIN) {
-      const rating = state.score >= RATING_ACE ? 'ACE OF THE SKIES' : state.score >= RATING_SKILLED ? 'SKILLED PILOT' : 'ROOKIE WINGS';
+      const rating = state.score >= RATING_LEGEND ? 'LEGEND OF THE SKIES' : state.score >= RATING_ACE ? 'ACE OF THE SKIES' : state.score >= RATING_SKILLED ? 'SKILLED PILOT' : 'ROOKIE WINGS';
       overlay(w, h, [
         'DELIVERED — ALL MISSIONS COMPLETE',
         rating,

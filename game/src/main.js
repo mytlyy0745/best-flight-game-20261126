@@ -3,7 +3,7 @@
 // there. Screens: title, mission brief, play, paused, mission failed,
 // mission complete, win.
 //
-// ?seed=N fixes the course. ?shot=start|play|drop|land (with &seed=N)
+// ?seed=N fixes the course. ?shot=start|play|drop|land|win (with &seed=N)
 // stages that scene instead of running the loop, paints it twice and sets
 // window.__shotReady for a screenshot.
 import { BEST_KEY, STEP, MISSIONS } from './config.js';

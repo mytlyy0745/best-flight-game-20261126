@@ -55,6 +55,7 @@ export const SCORE_GREASED = 250; // touchdown gentle, centred, no damage
 export const LAND_GREASED_VS = 3.5; // m/s descent at touchdown
 
 // Ratings shown on the win screen.
+export const RATING_LEGEND = 6500;
 export const RATING_ACE = 5000;
 export const RATING_SKILLED = 3800;
 

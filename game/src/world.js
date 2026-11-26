@@ -48,12 +48,17 @@ function buildCourse(rand) {
   // first zone 130 m sideways would be unhittable before its release point.
   let zx = clamp(rings[RING_COUNT - 1].x + (rand() * 2 - 1) * 40, -150, 150);
   for (let i = 0; i < ZONE_COUNT; i += 1) {
-    if (i > 0) zx = clamp(zx + (rand() * 2 - 1) * 110, -150, 150);
-    // First zone sits 600 m past the ring run's end: the plane leaves the
-    // rings high and fast, and the release point for a drop sits ~250 m
+    // Steps stay inside what the plane can line up in the ~2.8 s between
+    // one zone's release point and the next (a 110 m step needed 40 m/s
+    // lateral for the whole window and routinely missed; 80 m is fair).
+    if (i > 0) zx = clamp(zx + (rand() * 2 - 1) * 80, -150, 150);
+    // First zone sits 700 m past the ring run's end: the plane leaves the
+    // rings high and fast, and the release point for a drop sits ~200 m
     // ahead of its zone — it needs that room to descend to drop altitude
-    // before the first release point, or the window passes before it.
-    zones.push({ z: 3700 + i * 420, x: zx, r: ZONE_RADIUS, hit: false, passed: false });
+    // and level off before the first release point. A shorter gap let the
+    // release window pass while the plane was still descending (predicted
+    // landing point stalls while descending, so the window never opens).
+    zones.push({ z: 3800 + i * 400, x: zx, r: ZONE_RADIUS, hit: false, passed: false });
   }
   return { rings, zones };
 }

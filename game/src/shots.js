@@ -98,7 +98,7 @@ export function flyUntil(world, stop, maxSeconds = 240) {
 // Stage one named scene and return the screen to draw over it.
 export function stageShot(name, world) {
   world.reset();
-  if (name !== 'play' && name !== 'drop' && name !== 'land') {
+  if (name !== 'play' && name !== 'drop' && name !== 'land' && name !== 'win') {
     for (let i = 0; i < START_SECONDS / STEP; i += 1) world.step(STEP, null, true);
     return { screen: SCREEN_TITLE, best: 0 };
   }
@@ -119,6 +119,17 @@ export function stageShot(name, world) {
     const r = flyUntil(world, (s, e) => (e & EVENT_DROP) !== 0, 180);
     if ((r.events & EVENT_DROP) !== 0) {
       for (let i = 0; i < 45; i += 1) world.step(STEP, autopilot(world), false);
+    }
+    return { screen: SCREEN_PLAY, best: world.state.score };
+  }
+  // win: fly the whole course to a landing, then show the win panel
+  // (verifies the end-of-game rating; the score here is the staged run).
+  if (name === 'win') {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const r = flyUntil(world, (s, e) => (e & EVENT_LANDED) !== 0, 300);
+      if ((r.events & EVENT_LANDED) !== 0) return { screen: SCREEN_WIN, best: world.state.score };
+      if (world.state.over) world.retryMission(world.state.mission);
+      else break;
     }
     return { screen: SCREEN_PLAY, best: world.state.score };
   }
