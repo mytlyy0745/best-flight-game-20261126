@@ -14,6 +14,19 @@ function clamp(v, lo, hi) {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
+// How long a crate dropped now takes to reach the ground: the fall time
+// depends on the ground height where it lands, not where the zone is —
+// the hills vary by metres under a ~200 m fall, and that error alone is
+// most of a bullseye. Iterate twice on the predicted landing point.
+function fallTimeFor(s, zoneZ, world) {
+  let ft = Math.sqrt((2 * Math.max(15, s.alt - world.groundAt(zoneZ))) / 9.8);
+  for (let i = 0; i < 2; i += 1) {
+    const predZ = s.z + s.speed * ft;
+    ft = Math.sqrt((2 * Math.max(15, s.alt - world.groundAt(predZ))) / 9.8);
+  }
+  return ft;
+}
+
 // Fly toward a point: bank until the heading points at it, pitch until the
 // vertical speed closes the altitude gap, throttle to hold target speed.
 function autopilot(world) {
@@ -25,24 +38,50 @@ function autopilot(world) {
 
   if (s.mission === 1) {
     const ring = world.nextRing();
-    if (ring) {
+    const crate = world.nextSkyCrate();
+    // A floating crate is worth the detour only when it sits near the
+    // line the plane is already flying to the next ring: within 25 m
+    // of that line, so the bump out and back costs almost no ring
+    // margin. (The first version aimed at any crate within 45 m of
+    // the plane and cost rings: a crate 74 m off the ring line with
+    // 120 m to recover is unrecoverable.) Crates far off the line are
+    // left for a human pilot to chase.
+    if (crate && ring && crate.z > s.z + 30 && crate.z < ring.z && crate.z - s.z < 350) {
+      const t = (crate.z - s.z) / (ring.z - s.z);
+      const lineX = s.x + (ring.x - s.x) * t;
+      const lineAlt = s.alt + (ring.alt - s.alt) * t;
+      if (Math.abs(crate.x - lineX) < 25 && Math.abs(crate.alt - lineAlt) < 30) {
+        targetX = crate.x;
+        targetAlt = crate.alt;
+      } else {
+        targetX = ring.x;
+        targetAlt = ring.alt;
+      }
+    } else if (ring) {
       targetX = ring.x;
       targetAlt = ring.alt;
     }
   } else if (s.mission === 2) {
     const zone = world.nextZone();
     if (zone) {
-      targetX = zone.x;
+      // The drop wind pushes a falling crate sideways, so the release
+      // point sits upwind of the zone: fly the offset line, and release
+      // when the crate's predicted landing point crosses the zone.
+      // The fall time is iterated on the ground height at the predicted
+      // landing point, not at the zone: the hills vary by metres under
+      // a 200 m fall, and that error alone is most of a bullseye.
+      const fallTime = fallTimeFor(s, zone.z, world);
+      const predictedZ = s.z + s.speed * fallTime;
+      const predictedX = s.x + world.dropWind * fallTime;
+      targetX = zone.x - world.dropWind * fallTime;
       targetAlt = 70;
       targetSpeed = 72;
-      // Release when the crate's predicted landing point (it keeps the
-      // plane's forward speed while it falls to the ground below the
-      // zone) crosses the zone. The window is the zone's own radius
-      // (36 m) with a little slack, so a well-flown pass converts.
-      const ground = world.groundAt(zone.z);
-      const fallTime = Math.sqrt((2 * Math.max(15, s.alt - ground)) / 9.8);
-      const predictedZ = s.z + s.speed * fallTime;
-      if (Math.abs(s.x - zone.x) < 24 && Math.abs(predictedZ - zone.z) < 30) drop = true;
+      // Two tiers: first try for the bullseye (predicted landing within
+      // 10 m in both axes), and if that window passes without a lined-up
+      // release, still take the safe drop in the late half of the old
+      // window — the zone still converts, just not dead centre.
+      if (Math.abs(predictedX - zone.x) < 10 && Math.abs(predictedZ - zone.z) < 10) drop = true;
+      else if (predictedZ > zone.z - 10 && Math.abs(predictedX - zone.x) < 24 && Math.abs(predictedZ - zone.z) < 30) drop = true;
     }
   } else {
     // Final: glide down the centreline, fighting the crosswind.

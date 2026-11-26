@@ -72,6 +72,16 @@ export function createAudio() {
       tone(988, 0.15, 'sine', 0.15, 0.1);
       tone(1175, 0.3, 'sine', 0.15, 0.2);
     },
+    crate() {
+      // A bright two-note pluck for grabbing a sky crate.
+      tone(1046, 0.12, 'triangle', 0.16);
+      tone(1568, 0.2, 'triangle', 0.14, 0.08);
+    },
+    bullseye() {
+      // A single high ping for a crate dead on the zone centre.
+      tone(2093, 0.3, 'sine', 0.16);
+      tone(2637, 0.35, 'sine', 0.12, 0.06);
+    },
     combo() {
       // The ON FIRE fanfare: a quick rising run when a streak peaks.
       tone(1046, 0.12, 'sine', 0.16);

@@ -62,6 +62,19 @@ export const NEAR_MISS_DIST = 15;
 export const WINGMAN_Z0 = 700;
 export const WINGMAN_Z1 = 2200;
 
+// Round 9 gameplay — sky crates in the ring run, and a windy drop run.
+// Sky crates: floating supply crates off the ring line. Grabbing one is
+// a route choice — deviate from the rings for +75, or hold the line.
+// Drop wind: a seeded lateral wind through the drop run. Crates drift
+// sideways as they fall, so the pilot releases upwind; a crate that
+// lands within 10 m of a zone centre is a BULLSEYE.
+export const SKY_CRATE_COUNT = 3;
+export const SKY_CRATE_RADIUS = 20; // metres, 3D distance to collect
+export const SCORE_SKY_CRATE = 75;
+export const DROP_WIND_MAX = 6; // m/s lateral push on falling crates
+export const SCORE_BULLSEYE = 100;
+export const BULLSEYE_DIST = 10; // metres from zone centre, both axes
+
 // Scoring.
 export const SCORE_RING = 100;
 export const SCORE_STREAK = 25;
@@ -101,13 +114,13 @@ export const MISSIONS = [
   {
     id: 1,
     name: 'RING RUN',
-    brief: 'Fly through all 12 rings. Two are GOLDEN — smaller, worth 250. A balloon drifts over the valley: buzz it for +150. Watch the wind — gusts push you sideways, and a wingman flies formation with you for a stretch. Throttle with Shift / Ctrl, steer with the arrow keys or WASD. Rings pay 100, streaks pay extra, dead-centre hits pay more.',
+    brief: 'Fly through all 12 rings. Two are GOLDEN — smaller, worth 250. A balloon drifts over the valley: buzz it for +150. Supply crates float off the ring line: grab one for +75, but don\'t miss the next ring. Watch the wind — gusts push you sideways, and a wingman flies formation with you for a stretch. Throttle with Shift / Ctrl, steer with the arrow keys or WASD. Rings pay 100, streaks pay extra, dead-centre hits pay more.',
     goal: 'Fly through 12 rings',
   },
   {
     id: 2,
     name: 'SUPPLY DROP',
-    brief: 'Five villages need supplies. Press Space over a marked circle to drop a crate — it keeps your forward speed, so release a little early. 6 crates, 5 zones.',
+    brief: 'Five villages need supplies. Press Space over a marked circle to drop a crate — it keeps your forward speed, so release a little early. A crosswind drifts the crates sideways: watch the DROP WIND meter and release upwind. Land one within 10 m of the centre for a BULLSEYE +100. 6 crates, 5 zones.',
     goal: 'Drop crates on 5 zones',
   },
   {

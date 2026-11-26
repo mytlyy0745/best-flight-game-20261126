@@ -16,6 +16,8 @@ import {
   GUST_AMP1, GUST_AMP2, GUST_FREQ1, GUST_FREQ2,
   SCORE_ON_FIRE, ON_FIRE_RING_STREAK, ON_FIRE_ZONE_STREAK,
   SCORE_NEAR_MISS, NEAR_MISS_DIST,
+  SKY_CRATE_COUNT, SKY_CRATE_RADIUS, SCORE_SKY_CRATE,
+  DROP_WIND_MAX, SCORE_BULLSEYE, BULLSEYE_DIST,
 } from './config.js';
 import { createRandom, makeNoise } from './random.js';
 
@@ -29,6 +31,8 @@ export const EVENT_DROP = 64;
 export const EVENT_BALLOON = 128;
 export const EVENT_ON_FIRE = 256;
 export const EVENT_NEAR_MISS = 512;
+export const EVENT_CRATE = 1024;
+export const EVENT_BULLSEYE = 2048;
 
 function clamp(v, lo, hi) {
   return v < lo ? lo : v > hi ? hi : v;
@@ -76,7 +80,36 @@ function buildCourse(rand) {
     // landing point stalls while descending, so the window never opens).
     zones.push({ z: 3800 + i * 400, x: zx, r: ZONE_RADIUS, hit: false, passed: false });
   }
-  return { rings, zones };
+  // Sky crates: floating supply crates off the ring line, between rings
+  // 3 and 9 — a route choice, not a waypoint. Each sits 80 m past one
+  // ring (160 m before the next), offset 15-35 m sideways from the line
+  // between the two rings, so a pilot can reach it without giving up
+  // the next ring — but only if she goes for it. Early in the leg, so
+  // the plane is already turning toward the next ring when she grabs
+  // it, and has the whole leg to recover the line. (The first version
+  // sat mid-leg, 120 m before the ring: the plane collected it 30 m
+  // off-line with lateral velocity the wrong way and 1.36 s to recover
+  // — crossing errors of 32-34 m, just over the 30 m ring.) A human
+  // can chase the far ones; the autopilot only takes the ones near
+  // its path to the next ring.
+  const skyCrates = [];
+  const crateIdx = new Set();
+  while (crateIdx.size < SKY_CRATE_COUNT) {
+    crateIdx.add(3 + Math.floor(rand() * 7));
+  }
+  for (const i of [...crateIdx].sort((a, b) => a - b)) {
+    const midX = (rings[i].x + rings[i + 1].x) / 2;
+    const midAlt = (rings[i].alt + rings[i + 1].alt) / 2;
+    const off = (rand() < 0.5 ? -1 : 1) * (15 + rand() * 20);
+    skyCrates.push({
+      z: rings[i].z + 80,
+      x: clamp(midX + off, -200, 200),
+      alt: clamp(midAlt + (rand() * 2 - 1) * 30, 80, 260),
+      taken: false,
+      hitT: -1,
+    });
+  }
+  return { rings, zones, skyCrates };
 }
 
 export function createWorld(rand) {
@@ -158,6 +191,10 @@ export function createWorld(rand) {
   function gustAt(time) {
     return GUST_AMP1 * Math.sin(time * GUST_FREQ1 + gust.p1) + GUST_AMP2 * Math.sin(time * GUST_FREQ2 + gust.p2);
   }
+  // Drop wind: one steady lateral wind for the whole drop run, seeded
+  // per flight. Falling crates drift with it, so the pilot releases
+  // upwind — the HUD shows it, so it is a skill to learn, not a trap.
+  const dropWind = (rand() * 2 - 1) * DROP_WIND_MAX;
 
   // Ground height at distance z: rolling hills that flatten into the
   // runway approach, then dead flat along the strip itself.
@@ -210,6 +247,9 @@ export function createWorld(rand) {
       nearMissed: false, // the bird-flock near-miss bonus already paid
       onFireM1: false, // the ring-run ON FIRE bonus already paid
       onFireM2: false, // the drop-run ON FIRE bonus already paid
+      cratesCollected: 0, // sky crates grabbed in the ring run
+      bullseyes: 0, // crates landed within 10 m of a zone centre
+      dropWind, // steady lateral wind in the drop run, m/s (seeded)
       _fuelWarned: false,
     };
   }
@@ -218,6 +258,7 @@ export function createWorld(rand) {
     Object.assign(state, freshState());
     for (const r of course.rings) { r.hit = false; r.passed = false; r.hitT = -1; }
     for (const zn of course.zones) { zn.hit = false; zn.passed = false; }
+    for (const c of course.skyCrates) { c.taken = false; c.hitT = -1; }
   }
 
   // Restart one mission after a crash, keeping what earlier missions banked.
@@ -225,6 +266,7 @@ export function createWorld(rand) {
   function retryMission(mission) {
     const savedRings = course.rings.map((r) => ({ hit: r.hit, passed: r.passed, hitT: r.hitT }));
     const savedZones = course.zones.map((zn) => ({ hit: zn.hit, passed: zn.passed }));
+    const savedCrates = course.skyCrates.map((c) => ({ taken: c.taken, hitT: c.hitT }));
     const banked = state.banked;
     const ringsHit = state.ringsHit;
     const zonesHit = state.zonesHit;
@@ -233,6 +275,8 @@ export function createWorld(rand) {
     const onFireM1 = state.onFireM1;
     const onFireM2 = state.onFireM2;
     const nearMissed = state.nearMissed;
+    const cratesCollected = state.cratesCollected;
+    const bullseyes = state.bullseyes;
     reset();
     state.banked = banked;
     state.score = banked;
@@ -243,6 +287,9 @@ export function createWorld(rand) {
     state.onFireM1 = onFireM1;
     state.onFireM2 = onFireM2;
     state.nearMissed = nearMissed;
+    state.cratesCollected = cratesCollected;
+    state.bullseyes = bullseyes;
+    course.skyCrates.forEach((c, i) => { c.taken = savedCrates[i].taken; c.hitT = savedCrates[i].hitT; });
     state.mission = mission;
     state.missionStart = state.time;
     state.z = mission === 2 ? MISSION_Z.ringsEnd : mission === 3 ? MISSION_Z.zonesEnd : 0;
@@ -264,6 +311,10 @@ export function createWorld(rand) {
     // The next zone still ahead: hit or already-flown-past zones do not count,
     // or the pilot would keep aiming at a zone behind the plane.
     return course.zones.find((zn) => !zn.hit && !zn.passed) ?? null;
+  }
+  function nextSkyCrate() {
+    // The next floating crate still ahead of the plane.
+    return course.skyCrates.find((c) => !c.taken && c.z > state.z) ?? null;
   }
 
   function say(text) {
@@ -359,10 +410,13 @@ export function createWorld(rand) {
       }
     }
 
-    // Falling crates keep the plane's forward speed and fall.
+    // Falling crates keep the plane's forward speed and fall — and the
+    // drop wind pushes them sideways, so a crate released dead over the
+    // zone lands downwind of it. The pilot releases upwind.
     for (const c of state.cratesFalling) {
       c.vz -= 9.8 * dt;
       c.z += state.speed * dt;
+      c.x += state.dropWind * dt;
       c.alt += c.vz * dt;
       if (c.alt <= groundAt(c.z)) {
         c.done = true;
@@ -374,6 +428,17 @@ export function createWorld(rand) {
           const pts = SCORE_ZONE + SCORE_ZONE_STREAK * state.zoneStreak;
           state.zoneStreak += 1;
           state.maxCombo = Math.max(state.maxCombo, state.zoneStreak);
+          // BULLSEYE: a crate that lands within 10 m of the zone centre
+          // in both axes pays an extra 100 — the drop run's precision
+          // bonus, like a dead-centre ring.
+          let bullExtra = '';
+          if (Math.abs(zone.z - c.z) < BULLSEYE_DIST && Math.abs(zone.x - c.x) < BULLSEYE_DIST) {
+            state.bullseyes += 1;
+            state.score += SCORE_BULLSEYE;
+            state.scoreParts.bonus += SCORE_BULLSEYE;
+            events |= EVENT_BULLSEYE;
+            bullExtra = ` — BULLSEYE +${SCORE_BULLSEYE}`;
+          }
           // ON FIRE: four drops in a row and the streak is paying a
           // bonus — once per mission, with a fanfare.
           let fireExtra = '';
@@ -387,7 +452,7 @@ export function createWorld(rand) {
           state.score += pts;
           state.scoreParts.zones += pts;
           events |= EVENT_ZONE;
-          say(`SUPPLY DELIVERED +${pts}${fireExtra}`);
+          say(`SUPPLY DELIVERED +${pts}${fireExtra}${bullExtra}`);
         }
       }
     }
@@ -415,6 +480,23 @@ export function createWorld(rand) {
 
     // Rings: crossing a ring's plane scores a hit inside its circle.
     if (state.mission === 1) {
+      // Sky crates: fly within 20 m of a floating crate and it is yours.
+      // A route choice — the crate is never on the ring line, so grabbing
+      // one costs a small detour and a little of the next ring's margin.
+      for (const c of course.skyCrates) {
+        if (!c.taken && Math.abs(state.z - c.z) < SKY_CRATE_RADIUS) {
+          const cd = Math.hypot(state.x - c.x, state.alt - c.alt, state.z - c.z);
+          if (cd < SKY_CRATE_RADIUS) {
+            c.taken = true;
+            c.hitT = state.time;
+            state.cratesCollected += 1;
+            state.score += SCORE_SKY_CRATE;
+            state.scoreParts.bonus += SCORE_SKY_CRATE;
+            events |= EVENT_CRATE;
+            say(`SUPPLY CRATE +${SCORE_SKY_CRATE}`);
+          }
+        }
+      }
       for (const r of course.rings) {
         if (!r.passed && state.z >= r.z) {
           r.passed = true;
@@ -565,6 +647,7 @@ export function createWorld(rand) {
     balloonAt,
     birdsAt,
     gustAt,
+    dropWind,
     riverX,
     groundAt,
     reset,
@@ -572,5 +655,6 @@ export function createWorld(rand) {
     step,
     nextRing,
     nextZone,
+    nextSkyCrate,
   };
 }

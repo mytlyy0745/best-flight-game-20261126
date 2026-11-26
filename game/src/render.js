@@ -439,6 +439,23 @@ export function createRenderer(canvas) {
       ctx.fillText(wlabel, w / 2, 132);
       ctx.textAlign = 'left';
     }
+    // Drop-wind indicator: the drop run has one steady lateral wind,
+    // and falling crates drift with it — show the push so the pilot
+    // releases upwind. A strong one gets a shout.
+    if (mission === 2 && screen === SCREEN_PLAY) {
+      const dw = world.state.dropWind;
+      const dstrong = Math.abs(dw) >= 5;
+      const darrow = dw > 0.5 ? '→' : dw < -0.5 ? '←' : '·';
+      const dlabel = dstrong ? `DROP WIND! ${darrow} ${Math.abs(Math.round(dw))}` : `DROP WIND ${darrow} ${Math.abs(Math.round(dw))}`;
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 13px ui-monospace, Menlo, monospace';
+      const dtw = ctx.measureText(dlabel).width;
+      ctx.fillStyle = 'rgba(8,18,30,0.6)';
+      ctx.fillRect(w / 2 - dtw / 2 - 10, 128, dtw + 20, 20);
+      ctx.fillStyle = dstrong ? '#ff9a3c' : 'rgba(191,239,255,0.85)';
+      ctx.fillText(dlabel, w / 2, 132);
+      ctx.textAlign = 'left';
+    }
     // Compass strip, bottom centre.
     const cw = 360;
     const cx0 = w / 2 - cw / 2;
@@ -863,6 +880,12 @@ export function createRenderer(canvas) {
       const d = r.z - camZ;
       if (d > 10 && d < VIEW_DIST) drawables.push({ d, kind: 'ring', o: r });
     }
+    // Sky crates float off the ring line in mission 1 — a detour worth
+    // taking. Taken ones stay in the list briefly for their burst.
+    for (const c of world.course.skyCrates) {
+      const d = c.z - camZ;
+      if (d > 10 && d < VIEW_DIST) drawables.push({ d, kind: 'skycrate', o: c });
+    }
     for (const c of state.cratesFalling) {
       const d = c.z - camZ;
       if (d > 5 && d < VIEW_DIST) drawables.push({ d, kind: 'crate', o: c });
@@ -1220,6 +1243,66 @@ export function createRenderer(canvas) {
         ctx.moveTo(sx - 8, sy + 8);
         ctx.lineTo(sx - 40, sy + 60);
         ctx.stroke();
+      } else if (item.kind === 'skycrate') {
+        const c = item.o;
+        const sx = w / 2 + (camDepth * (c.x - camX)) / d;
+        // A gentle bob, deterministic in time, so the crate reads as
+        // floating rather than nailed to the sky.
+        const sy = horizonY + (camDepth * (camAlt - c.alt)) / d + Math.sin(state.time * 1.2 + c.z) * 2;
+        const s = Math.max(3, (camDepth * 2.2) / d);
+        if (sx < -80 || sx > w + 80 || sy < -60 || sy > h + 40) continue;
+        if (!c.taken) {
+          // A little parachute canopy over a wooden supply crate.
+          ctx.fillStyle = '#e8e4da';
+          ctx.beginPath();
+          ctx.arc(sx, sy - s * 1.6, s * 1.5, Math.PI, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = '#d84a35';
+          ctx.beginPath();
+          ctx.arc(sx, sy - s * 1.6, s * 1.5, Math.PI * 1.25, Math.PI * 1.75);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(90,58,34,0.8)';
+          ctx.lineWidth = Math.max(1, s * 0.06);
+          ctx.beginPath();
+          ctx.moveTo(sx - s * 1.4, sy - s * 1.6);
+          ctx.lineTo(sx - s * 0.7, sy - s * 0.6);
+          ctx.moveTo(sx + s * 1.4, sy - s * 1.6);
+          ctx.lineTo(sx + s * 0.7, sy - s * 0.6);
+          ctx.stroke();
+          ctx.fillStyle = '#c98f3d';
+          ctx.fillRect(sx - s, sy - s, s * 2, s * 2);
+          ctx.strokeStyle = '#6b4a1a';
+          ctx.lineWidth = Math.max(1, s * 0.08);
+          ctx.strokeRect(sx - s, sy - s, s * 2, s * 2);
+          ctx.fillStyle = 'rgba(255,255,255,0.85)';
+          ctx.fillRect(sx - s * 0.2, sy - s, s * 0.4, s * 2);
+          if (s > 9) {
+            ctx.fillStyle = '#ffd166';
+            ctx.font = `bold ${Math.max(11, Math.min(18, s * 0.5))}px ui-monospace, monospace`;
+            ctx.textAlign = 'center';
+            ctx.fillText('GRAB +75', sx, sy - s * 3.4);
+            ctx.textAlign = 'left';
+          }
+        } else if (c.hitT >= 0) {
+          // Collect burst: a golden ripple where the crate was.
+          const bt = (state.time - c.hitT) / 0.8;
+          if (bt < 1) {
+            ctx.strokeStyle = `rgba(255,210,90,${0.85 * (1 - bt)})`;
+            ctx.lineWidth = Math.max(2, s * 0.15 * (1 - bt));
+            ctx.beginPath();
+            ctx.arc(sx, sy, s * (1 + bt * 1.4), 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = `rgba(255,230,150,${0.9 * (1 - bt)})`;
+            for (let k = 0; k < 5; k += 1) {
+              const a = (k * Math.PI * 2) / 5 + 0.4;
+              ctx.beginPath();
+              ctx.arc(sx + Math.cos(a) * s * (1 + bt), sy + Math.sin(a) * s * (1 + bt), Math.max(1.5, s * 0.12), 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        }
       } else if (item.kind === 'crate') {
         const c = item.o;
         // A crate falls just ahead of the camera: clamp its projection
@@ -1311,15 +1394,15 @@ export function createRenderer(canvas) {
         'Three sorties. One little plane. Bring her home.',
         'Arrows / WASD — fly    Shift / Ctrl — throttle',
         'Space — drop a crate    P — pause    M — mute',
-        best > 0 ? `Best score: ${best}` : 'Fly the rings, drop the supplies, land her.',
+        best > 0 ? `Best score: ${best}` : 'Fly the rings, grab the crates, drop the supplies, land her.',
         'Press Space or click to fly',
       ], '#ffd166', -70);
     } else if (screen === SCREEN_BRIEF) {
       const m = world.state.mission;
       const defs = [
         null,
-        ['MISSION 1 — RING RUN', 'Fly through all 12 rings. Gusts push you sideways —', 'watch the WIND meter and correct. A wingman flies', 'formation with you for a stretch. Press Space to launch.'],
-        ['MISSION 2 — SUPPLY DROP', 'Five villages need supplies. Press Space over a', 'marked circle to drop a crate — it keeps your speed,', 'so release a little early. 6 crates, 5 zones.', 'Press Space to launch.'],
+        ['MISSION 1 — RING RUN', 'Fly through all 12 rings. Gusts push you sideways —', 'watch the WIND meter and correct. A wingman flies', 'formation with you for a stretch. Crates float off', 'the ring line: grab one for +75. Press Space to launch.'],
+        ['MISSION 2 — SUPPLY DROP', 'Five villages need supplies. Press Space over a', 'marked circle to drop a crate — it keeps your speed,', 'so release a little early. The DROP WIND drifts the', 'crates sideways: release upwind. Bullseye +100.', 'Press Space to launch.'],
         ['MISSION 3 — STORM LANDING', 'Crosswind from the right. Land on the runway:', 'slow, level, gentle — under 100 m/s and under', '7 m/s descent, inside the strip. Press Space.'],
       ];
       overlay(w, h, defs[m] ?? defs[1], '#7dd7ff');
