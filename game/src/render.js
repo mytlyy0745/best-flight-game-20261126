@@ -82,7 +82,13 @@ export function createRenderer(canvas) {
     glow.addColorStop(1, dusk ? 'rgba(255,170,90,0)' : 'rgba(255,220,140,0)');
     ctx.fillStyle = glow;
     ctx.fillRect(sx - 135, sy - 135, 270, 270);
-    ctx.fillStyle = dusk ? '#ffe0a8' : '#fff6d8';
+    // The disc itself is a radial gradient, bright in the middle and
+    // warm at the rim — a flat disc read as a pale sticker on the sky.
+    const disc = ctx.createRadialGradient(sx, sy, 2, sx, sy, dusk ? 28 : 26);
+    disc.addColorStop(0, '#fffdf2');
+    disc.addColorStop(0.7, dusk ? '#ffe0a8' : '#fff6d8');
+    disc.addColorStop(1, dusk ? '#ffb060' : '#ffe9a8');
+    ctx.fillStyle = disc;
     ctx.beginPath();
     ctx.arc(sx, sy, dusk ? 28 : 26, 0, Math.PI * 2);
     ctx.fill();
@@ -135,8 +141,17 @@ export function createRenderer(canvas) {
     // individual peaks reads as a white rash — a snow line caps only
     // the tallest humps, and each cap hugs its crest.
     if (layer === 0) {
-      const snowLine = horizonY - 105;
-      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      // The snow line sits a little lower now, so the caps are bigger,
+      // and the fill fades from white at the crest to clear at the line —
+      // snow melting into the rock, not a flat white blob pasted on the
+      // ridge (the round-5 caps read as white stickers on the drop and
+      // land shots because their lower edge was a hard horizontal line).
+      const snowLine = horizonY - 95;
+      const sg = ctx.createLinearGradient(0, horizonY - 125, 0, snowLine);
+      sg.addColorStop(0, 'rgba(255,255,255,0.95)');
+      sg.addColorStop(0.65, 'rgba(255,255,255,0.85)');
+      sg.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = sg;
       ctx.beginPath();
       let started = false;
       for (const [x, y] of ridge) {
@@ -198,9 +213,12 @@ export function createRenderer(canvas) {
     }
   }
 
-  function drawPlane(w, h, state, time) {
+  function drawPlane(w, h, state, time, screen) {
     const cx = w / 2;
-    const cy = h * 0.6 - state.pitch * 16;
+    // On the title screen the plane sits lower, clear of the panel:
+    // round 5 moved the panel up and the fuselage still hid behind it,
+    // wings sticking out either side like a bisected plane.
+    const cy = h * 0.6 - state.pitch * 16 + (screen === SCREEN_TITLE ? 80 : 0);
     const scale = Math.min(w, h) / 720;
     ctx.save();
     ctx.translate(cx, cy);
@@ -482,8 +500,9 @@ export function createRenderer(canvas) {
     const fadeOut = clamp((WINGMAN_Z1 - z) / 300, 0, 1);
     const peel = clamp((z - 1900) / 300, 0, 1);
     return {
-      d: 120, // metres ahead of the camera, in formation
-      x: state.x + 70 + peel * 150,
+      d: 100, // metres ahead of the camera, in formation — close enough
+      // to read as a formation partner, not a speck at the frame edge
+      x: state.x + 50 + peel * 130,
       alt: state.alt + 12 - peel * 40,
       alpha: Math.min(fadeIn, fadeOut),
       roll: -0.15 + peel * 0.6,
@@ -531,7 +550,13 @@ export function createRenderer(canvas) {
         const bandH = Math.abs(prevY - y) + 1.5;
         // A cross-road near the village, drawn as a full-width grey band.
         const crossRoad = !onRunway && z >= 5740 && z <= 5770;
-        const field = FIELDS[Math.floor(hash(i + Math.floor(camZ / SEG_LEN)) * FIELDS.length)];
+        const rawField = FIELDS[Math.floor(hash(i + Math.floor(camZ / SEG_LEN)) * FIELDS.length)];
+        // Mute every band toward one common olive tone: the bands still
+        // vary, but they stop alternating loudly enough to read as
+        // stacked paint stripes. Rounds 3 and 5 dressed the stripes
+        // with patchwork and furrows; the band colours themselves were
+        // the stripes — every shot still reads as horizontal bands.
+        const field = [Math.round(lerp(rawField[0], 118, 0.35)), Math.round(lerp(rawField[1], 138, 0.35)), Math.round(lerp(rawField[2], 88, 0.35))];
         // On the airfield the band is grass; the strip itself is drawn
         // separately below, so the runway reads as a strip in a field
         // instead of the whole world turning grey.
@@ -655,8 +680,11 @@ export function createRenderer(canvas) {
           // wider than the screen and nothing else reads on it.
           for (const side of [-1, 1]) {
             const tx = cx + side * ((camDepth * 6) / d);
-            const tw = Math.max(1.5, (camDepth * 2.2) / d);
-            ctx.fillStyle = 'rgba(52,52,60,0.4)';
+            // Clamped: at a few metres out the world-space width explodes
+            // (over 100 px at d = 8) and the marks read as giant dark
+            // slabs on the foreground asphalt, not wheel tracks.
+            const tw = Math.min(10, Math.max(1.5, (camDepth * 2.2) / d));
+            ctx.fillStyle = 'rgba(52,52,60,0.5)';
             ctx.fillRect(tx - tw / 2, topY, tw, bandH);
           }
           // Centreline dashes: 20 m of paint, 30 m of gap, in world space.
@@ -694,8 +722,11 @@ export function createRenderer(canvas) {
           if (bandH > 20) {
             for (let k = 0; k < 2; k += 1) {
               const rx2 = cx - half + hash(i * 83 + k * 29) * half * 2;
-              const rw2 = half * (0.2 + hash(i * 37 + k * 13) * 0.3);
-              ctx.fillStyle = 'rgba(60,60,70,0.25)';
+              // Clamped like the tyre marks: near the camera the strip
+              // is wider than the screen, so an unclamped patch becomes
+              // a giant dark rectangle on the foreground asphalt.
+              const rw2 = Math.min(180, half * (0.2 + hash(i * 37 + k * 13) * 0.3));
+              ctx.fillStyle = 'rgba(60,60,70,0.18)';
               ctx.fillRect(rx2, topY + bandH * (0.2 + k * 0.4), rw2, bandH * 0.25);
             }
           }
@@ -795,9 +826,11 @@ export function createRenderer(canvas) {
         // from far away instead of being a faint ellipse on the ground.
         if (!zn.hit) {
           const beamTop = Math.max(horizonY - 180, horizonY + (camDepth * (camAlt - (world.groundAt(zn.z) + 150))) / d);
-          const bw = Math.min(16, Math.max(2, rx * 0.18));
+          // Wider and brighter: at 200+ m the old 16 px beam was a faint
+          // thread, and the drop shot's target read as a small smudge.
+          const bw = Math.min(26, Math.max(3, rx * 0.28));
           const bg2 = ctx.createLinearGradient(0, gy, 0, beamTop);
-          bg2.addColorStop(0, `rgba(255,190,60,${0.45 + 0.15 * Math.sin(state.time * 4)})`);
+          bg2.addColorStop(0, `rgba(255,190,60,${0.55 + 0.2 * Math.sin(state.time * 4)})`);
           bg2.addColorStop(1, 'rgba(255,190,60,0)');
           ctx.fillStyle = bg2;
           ctx.fillRect(sx - bw / 2, beamTop, bw, gy - beamTop);
@@ -807,7 +840,7 @@ export function createRenderer(canvas) {
         ctx.ellipse(sx, gy, rx, ry, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = zn.hit ? '#50ff8c' : '#ffbe3c';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 3;
         ctx.stroke();
         if (zn.hit) {
           ctx.fillStyle = '#50ff8c';
@@ -821,12 +854,14 @@ export function createRenderer(canvas) {
         if (d < 30) continue; // too close to read as a tree — it is beside the camera
         const sx = w / 2 + (camDepth * (t.x - camX)) / d;
         const gy = horizonY + (camDepth * (camAlt - world.groundAt(t.z))) / d;
-        // Cap the on-screen size: a tree a few dozen metres ahead would
-        // otherwise blow up into a giant green disc filling the frame
-        // (the drop shot's foreground trees). Real trees this close are
-        // beside the camera, not in it.
+        // Cap the DRAWN size, not the scale factor: the round canopy
+        // spans 1.7×s and a conifer crown 1.6×s, so the round-5 cap of
+        // 64 still let a foreground round tree bloom into a ~110 px
+        // green disc (the drop shot's foreground lollipops). At s ≤ 40
+        // a round canopy is ≤ 68 px across and a pine crown ≤ 64 px —
+        // a tree, not a disc.
         let s = (camDepth * 9 * t.s) / d;
-        s = Math.min(s, 64);
+        s = Math.min(s, 40);
         if (s < 2 || sx < -20 || sx > w + 20) continue;
         // Soft ground shadow so the tree sits on the field, not on top of it.
         ctx.fillStyle = 'rgba(0,0,0,0.16)';
@@ -946,6 +981,12 @@ export function createRenderer(canvas) {
         const sy = horizonY + (camDepth * (camAlt - r.alt)) / d;
         const rr = (camDepth * r.r) / d;
         if (rr < 3 || sx < -rr || sx > w + rr) continue;
+        // Far rings fade: the next-next ring should read as depth
+        // behind the one you are flying at, not as a second ring
+        // pasted concentrically on top of it (the play shot's
+        // near-concentric pair).
+        ctx.save();
+        ctx.globalAlpha = d > 320 ? 0.55 : 1;
         // Golden rings read gold, not yellow, and they sparkle — the
         // player should spot the 250-pointer a long way off.
         const col = r.hit ? '#50ff8c' : r.passed ? 'rgba(255,90,78,0.55)' : r.golden ? '#ffb020' : '#ffc93c';
@@ -1010,6 +1051,7 @@ export function createRenderer(canvas) {
         ctx.moveTo(sx, sy + rr * 0.94);
         ctx.lineTo(sx, gy);
         ctx.stroke();
+        ctx.restore();
       } else if (item.kind === 'balloon') {
         const bp = item.o;
         const sx = w / 2 + (camDepth * (bp.x - camX)) / d;
@@ -1142,7 +1184,7 @@ export function createRenderer(canvas) {
       }
     }
 
-    drawPlane(w, h, state, state.time);
+    drawPlane(w, h, state, state.time, screen);
     // Contrails streaming off the wingtips at speed.
     if (state.speed > 90 && screen === SCREEN_PLAY) {
       const scale = Math.min(w, h) / 720;
