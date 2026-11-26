@@ -1,7 +1,7 @@
 // Sky Courier — everything the eye sees: pseudo-3D chase view over
 // rolling terrain, the aircraft, the rings and the runway, then the HUD
 // instruments and the screen overlays. All drawing is plain 2D canvas.
-import { SEG_LEN, VIEW_DIST, RUNWAY, MISSION_Z, RING_COUNT, RATING_LEGEND, RATING_ACE, RATING_SKILLED } from './config.js';
+import { SEG_LEN, VIEW_DIST, RUNWAY, MISSION_Z, RING_COUNT, RATING_LEGEND, RATING_ACE, RATING_SKILLED, GUST_STRONG, WINGMAN_Z0, WINGMAN_Z1 } from './config.js';
 
 export const SCREEN_TITLE = 0;
 export const SCREEN_BRIEF = 1;
@@ -43,6 +43,10 @@ function clamp(v, lo, hi) {
 
 export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d');
+  // A free-running animation clock for moments when the world clock
+  // stands still (the win screen): fireworks need time to bloom.
+  let animT = 0;
+  let lastNow = 0;
 
   function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -345,18 +349,39 @@ export function createRenderer(canvas) {
     ctx.textAlign = 'left';
     // Combo meter: the current ring/zone streak, shown once it is worth
     // bragging about. It climbs gold as the streak builds — the number
-    // a player chases after the first few rings.
+    // a player chases after the first few rings. At six it is ON FIRE.
     const combo = mission === 1 ? world.state.streak : mission === 2 ? world.state.zoneStreak : 0;
     if (combo >= 2) {
       const ccol = combo >= 6 ? '#ff9a3c' : combo >= 4 ? '#ffd166' : '#ffe9a8';
       ctx.textAlign = 'center';
       ctx.font = 'bold 15px ui-monospace, Menlo, monospace';
-      const clabel = `COMBO x${combo}`;
+      const clabel = combo >= 6 ? `COMBO x${combo} — ON FIRE` : `COMBO x${combo}`;
       const ctw = ctx.measureText(clabel).width;
+      if (combo >= 6) {
+        ctx.shadowColor = '#ffd166';
+        ctx.shadowBlur = 14;
+      }
       ctx.fillStyle = 'rgba(8,18,30,0.6)';
       ctx.fillRect(w / 2 - ctw / 2 - 10, 100, ctw + 20, 22);
       ctx.fillStyle = ccol;
       ctx.fillText(clabel, w / 2, 105);
+      ctx.shadowBlur = 0;
+      ctx.textAlign = 'left';
+    }
+    // Wind indicator: the ring run has gusts — show the push so the
+    // pilot can correct before the next ring. A strong one gets a shout.
+    if (mission === 1 && screen === SCREEN_PLAY) {
+      const g = world.state.gust;
+      const strong = Math.abs(g) >= GUST_STRONG;
+      const arrow = g > 0.5 ? '→' : g < -0.5 ? '←' : '·';
+      const wlabel = strong ? `GUST! ${arrow} ${Math.abs(Math.round(g))}` : `WIND ${arrow} ${Math.abs(Math.round(g))}`;
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 13px ui-monospace, Menlo, monospace';
+      const wtw = ctx.measureText(wlabel).width;
+      ctx.fillStyle = 'rgba(8,18,30,0.6)';
+      ctx.fillRect(w / 2 - wtw / 2 - 10, 128, wtw + 20, 20);
+      ctx.fillStyle = strong ? '#ff9a3c' : 'rgba(191,239,255,0.85)';
+      ctx.fillText(wlabel, w / 2, 132);
       ctx.textAlign = 'left';
     }
     // Compass strip, bottom centre.
@@ -447,8 +472,29 @@ export function createRenderer(canvas) {
     ctx.textAlign = 'left';
   }
 
+  // The wingman flies formation through the ring run: alongside and a
+  // little ahead, then peels off to the right and is gone. Pure
+  // position-in-time, so the same seed always flies the same formation.
+  function wingmanAt(state) {
+    const z = state.z;
+    if (z < WINGMAN_Z0 || z > WINGMAN_Z1) return null;
+    const fadeIn = clamp((z - WINGMAN_Z0) / 100, 0, 1);
+    const fadeOut = clamp((WINGMAN_Z1 - z) / 300, 0, 1);
+    const peel = clamp((z - 1900) / 300, 0, 1);
+    return {
+      d: 120, // metres ahead of the camera, in formation
+      x: state.x + 70 + peel * 150,
+      alt: state.alt + 12 - peel * 40,
+      alpha: Math.min(fadeIn, fadeOut),
+      roll: -0.15 + peel * 0.6,
+    };
+  }
+
   function draw(state, world, screen, best) {
     resize();
+    const now = (typeof performance !== 'undefined' ? performance.now() : 0) / 1000;
+    if (lastNow > 0) animT += Math.min(now - lastNow, 0.1);
+    lastNow = now;
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
     const camZ = state.z;
@@ -731,6 +777,11 @@ export function createRenderer(canvas) {
       const d = b.z - camZ;
       if (d > 20 && d < VIEW_DIST) drawables.push({ d, kind: 'bird', o: b });
     }
+    // The wingman joins the formation through the ring run.
+    if (state.mission === 1) {
+      const wm = wingmanAt(state);
+      if (wm) drawables.push({ d: wm.d, kind: 'wingman', o: wm });
+    }
     drawables.sort((a, b) => b.d - a.d);
     for (const item of drawables) {
       const { d } = item;
@@ -1010,6 +1061,51 @@ export function createRenderer(canvas) {
         ctx.lineTo(sx, sy);
         ctx.lineTo(sx + s, sy - flap);
         ctx.stroke();
+      } else if (item.kind === 'wingman') {
+        // A little sister ship in formation: red wings, cream fuselage,
+        // seen from behind, with a short contrail of her own.
+        const wm = item.o;
+        const sx = w / 2 + (camDepth * (wm.x - camX)) / d;
+        const sy = horizonY + (camDepth * (camAlt - wm.alt)) / d;
+        if (sx < -60 || sx > w + 60 || sy < -40 || sy > h + 40) continue;
+        ctx.save();
+        ctx.globalAlpha = wm.alpha;
+        ctx.translate(sx, sy);
+        ctx.rotate(wm.roll);
+        const ws = 0.3 * (Math.min(w, h) / 720);
+        ctx.scale(ws, ws);
+        ctx.fillStyle = '#c23b2e';
+        ctx.beginPath();
+        ctx.moveTo(-118, 6); ctx.lineTo(-16, -8); ctx.lineTo(-14, 8); ctx.lineTo(-112, 22); ctx.closePath();
+        ctx.moveTo(118, 6); ctx.lineTo(16, -8); ctx.lineTo(14, 8); ctx.lineTo(112, 22); ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#e8e4da';
+        ctx.beginPath();
+        ctx.moveTo(-13, 26);
+        ctx.quadraticCurveTo(-16, -30, -8, -52);
+        ctx.quadraticCurveTo(0, -58, 8, -52);
+        ctx.quadraticCurveTo(16, -30, 13, 26);
+        ctx.quadraticCurveTo(0, 34, -13, 26);
+        ctx.fill();
+        ctx.fillStyle = '#c23b2e';
+        ctx.beginPath();
+        ctx.moveTo(-4, -50); ctx.lineTo(-3, -78); ctx.lineTo(5, -78); ctx.lineTo(6, -50); ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.beginPath();
+        ctx.ellipse(0, -54, 15, 3.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        // Her contrail: a short fading streak trailing behind her.
+        const g3 = ctx.createLinearGradient(sx, sy + 8, sx - 40, sy + 60);
+        g3.addColorStop(0, `rgba(255,255,255,${0.3 * wm.alpha})`);
+        g3.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.strokeStyle = g3;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(sx - 8, sy + 8);
+        ctx.lineTo(sx - 40, sy + 60);
+        ctx.stroke();
       } else if (item.kind === 'crate') {
         const c = item.o;
         // A crate falls just ahead of the camera: clamp its projection
@@ -1068,6 +1164,33 @@ export function createRenderer(canvas) {
     }
     drawHud(w, h, state, world, screen);
 
+    // Fireworks over the field when she greases it in: seeded bursts
+    // that bloom and fade on a loop, behind the win panel. A greased
+    // landing deserves a little sky of its own.
+    if (screen === SCREEN_WIN && state.greased) {
+      const cols = ['#ffd166', '#ff5a4e', '#7dd7ff', '#7dffa8'];
+      for (let i = 0; i < 4; i += 1) {
+        const fx = w * (0.12 + hash(i * 7 + 3) * 0.76);
+        const fy = h * (0.1 + hash(i * 11 + 5) * 0.22);
+        const cycle = (animT * 0.4 + i * 0.37) % 1;
+        const fr = 8 + cycle * 46;
+        const fa = cycle < 0.7 ? 0.9 * (1 - cycle / 0.7) : 0;
+        if (fa <= 0) continue;
+        ctx.save();
+        ctx.globalAlpha = fa;
+        ctx.strokeStyle = cols[i % 4];
+        ctx.lineWidth = 2;
+        for (let k = 0; k < 10; k += 1) {
+          const a = (k / 10) * Math.PI * 2 + i;
+          ctx.beginPath();
+          ctx.moveTo(fx + Math.cos(a) * fr * 0.4, fy + Math.sin(a) * fr * 0.4);
+          ctx.lineTo(fx + Math.cos(a) * fr, fy + Math.sin(a) * fr);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+
     if (screen === SCREEN_TITLE) {
       overlay(w, h, [
         'SKY COURIER',
@@ -1081,7 +1204,7 @@ export function createRenderer(canvas) {
       const m = world.state.mission;
       const defs = [
         null,
-        ['MISSION 1 — RING RUN', 'Fly through all 12 rings. Throttle with Shift / Ctrl,', 'steer with the arrow keys or WASD. Rings pay 100,', 'streaks and dead-centre hits pay extra. Press Space to launch.'],
+        ['MISSION 1 — RING RUN', 'Fly through all 12 rings. Gusts push you sideways —', 'watch the WIND meter and correct. A wingman flies', 'formation with you for a stretch. Press Space to launch.'],
         ['MISSION 2 — SUPPLY DROP', 'Five villages need supplies. Press Space over a', 'marked circle to drop a crate — it keeps your speed,', 'so release a little early. 6 crates, 5 zones.', 'Press Space to launch.'],
         ['MISSION 3 — STORM LANDING', 'Crosswind from the right. Land on the runway:', 'slow, level, gentle — under 100 m/s and under', '7 m/s descent, inside the strip. Press Space.'],
       ];

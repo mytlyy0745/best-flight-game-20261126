@@ -54,9 +54,10 @@ function autopilot(world) {
 
   const headRad = ((s.heading - 90) * Math.PI) / 180;
   const lateralVel = Math.sin(headRad) * s.speed;
-  // The crosswind adds to the lateral speed, so the heading that holds a
-  // wanted lateral velocity must crab into it.
-  const wind = s.mission === 3 && s.z > 5000 ? CROSSWIND : 0;
+  // The wind adds to the lateral speed, so the heading that holds a
+  // wanted lateral velocity must crab into it — the crosswind in the
+  // landing, and the gusts through the ring run.
+  const wind = s.mission === 3 && s.z > 5000 ? CROSSWIND : s.mission === 1 ? s.gust : 0;
   const wantLateral = clamp((targetX - s.x) * 0.5, -40, 40);
   const wantHeading = 90 + (Math.asin(clamp((wantLateral - wind) / Math.max(40, s.speed), -1, 1)) * 180) / Math.PI;
   let roll = clamp((wantHeading - s.heading) * 0.13, -1, 1);

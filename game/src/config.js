@@ -39,6 +39,29 @@ export const SCORE_BALLOON_BUZZ = 150;
 export const BALLOON_BUZZ_DIST = 45;
 export const RING_BURST_TIME = 0.8; // seconds a hit ring keeps sparkling
 
+// Round 6 fun — gusts, combo peaks, the wingman, near-misses.
+// Gusts: slow, seeded wind in the ring run only. Two sines, so the push
+// builds and fades over ~10-20 s — a pilot can see it coming and correct,
+// and the autopilot crabs into it the same way it crabs the crosswind.
+// Peak push is 8 m/s: felt, never unfair.
+export const GUST_AMP1 = 5;
+export const GUST_AMP2 = 3;
+export const GUST_FREQ1 = 0.35;
+export const GUST_FREQ2 = 0.13;
+export const GUST_STRONG = 6; // m/s — at or above this the HUD calls it a GUST
+// ON FIRE: the first time a streak peaks — 6 rings in a row, or 4 zones
+// in a row — it pays a bonus once per mission, with a fanfare.
+export const SCORE_ON_FIRE = 50;
+export const ON_FIRE_RING_STREAK = 6;
+export const ON_FIRE_ZONE_STREAK = 4;
+// Near-miss: thread the bird flock close enough to ruffle feathers.
+export const SCORE_NEAR_MISS = 25;
+export const NEAR_MISS_DIST = 15;
+// The wingman: a second plane flies formation beside you for a stretch
+// of the ring run, then peels off and is gone.
+export const WINGMAN_Z0 = 700;
+export const WINGMAN_Z1 = 2200;
+
 // Scoring.
 export const SCORE_RING = 100;
 export const SCORE_STREAK = 25;
@@ -78,7 +101,7 @@ export const MISSIONS = [
   {
     id: 1,
     name: 'RING RUN',
-    brief: 'Fly through all 12 rings. Two are GOLDEN — smaller, worth 250. A balloon drifts over the valley: buzz it for +150. Throttle with Shift / Ctrl, steer with the arrow keys or WASD. Rings pay 100, streaks pay extra, dead-centre hits pay more.',
+    brief: 'Fly through all 12 rings. Two are GOLDEN — smaller, worth 250. A balloon drifts over the valley: buzz it for +150. Watch the wind — gusts push you sideways, and a wingman flies formation with you for a stretch. Throttle with Shift / Ctrl, steer with the arrow keys or WASD. Rings pay 100, streaks pay extra, dead-centre hits pay more.',
     goal: 'Fly through 12 rings',
   },
   {

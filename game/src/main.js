@@ -8,7 +8,7 @@
 // window.__shotReady for a screenshot.
 import { BEST_KEY, STEP, MISSIONS } from './config.js';
 import { createRandom } from './random.js';
-import { createWorld, EVENT_RING, EVENT_ZONE, EVENT_LANDED, EVENT_MISSION_DONE, EVENT_DROP, EVENT_BALLOON } from './world.js';
+import { createWorld, EVENT_RING, EVENT_ZONE, EVENT_LANDED, EVENT_MISSION_DONE, EVENT_DROP, EVENT_BALLOON, EVENT_ON_FIRE, EVENT_NEAR_MISS } from './world.js';
 import { ACTION_CONFIRM, ACTION_PAUSE, ACTION_MUTE, createInput } from './input.js';
 import { createAudio } from './audio.js';
 import { createRenderer, SCREEN_TITLE, SCREEN_BRIEF, SCREEN_PLAY, SCREEN_PAUSED, SCREEN_FAIL, SCREEN_MISSION_DONE, SCREEN_WIN } from './render.js';
@@ -130,6 +130,8 @@ function runGame() {
     if (events & EVENT_ZONE) audio.zone();
     if (events & EVENT_DROP) audio.drop();
     if (events & EVENT_BALLOON) audio.balloon();
+    if (events & EVENT_ON_FIRE) audio.combo();
+    if (events & EVENT_NEAR_MISS) audio.nearMiss();
     if (events & EVENT_LANDED) {
       audio.land();
       endGame(true);

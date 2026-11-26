@@ -72,6 +72,18 @@ export function createAudio() {
       tone(988, 0.15, 'sine', 0.15, 0.1);
       tone(1175, 0.3, 'sine', 0.15, 0.2);
     },
+    combo() {
+      // The ON FIRE fanfare: a quick rising run when a streak peaks.
+      tone(1046, 0.12, 'sine', 0.16);
+      tone(1318, 0.12, 'sine', 0.16, 0.09);
+      tone(1568, 0.12, 'sine', 0.16, 0.18);
+      tone(2093, 0.3, 'sine', 0.14, 0.27);
+    },
+    nearMiss() {
+      // A startled little two-note chirp for threading the flock.
+      tone(1568, 0.1, 'sine', 0.14);
+      tone(2093, 0.18, 'sine', 0.12, 0.08);
+    },
     zone() { tone(659, 0.2, 'sine', 0.15); tone(988, 0.3, 'sine', 0.13, 0.08); },
     drop() { tone(220, 0.12, 'triangle', 0.12); },
     crash() {

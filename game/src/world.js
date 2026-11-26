@@ -13,6 +13,9 @@ import {
   TIME_PAR_LAND, SCORE_GREASED, LAND_GREASED_VS,
   GOLDEN_RING_COUNT, GOLDEN_RING_RADIUS, SCORE_GOLDEN_RING,
   SCORE_BALLOON_BUZZ, BALLOON_BUZZ_DIST,
+  GUST_AMP1, GUST_AMP2, GUST_FREQ1, GUST_FREQ2,
+  SCORE_ON_FIRE, ON_FIRE_RING_STREAK, ON_FIRE_ZONE_STREAK,
+  SCORE_NEAR_MISS, NEAR_MISS_DIST,
 } from './config.js';
 import { createRandom, makeNoise } from './random.js';
 
@@ -24,6 +27,8 @@ export const EVENT_FUEL_EMPTY = 16;
 export const EVENT_MISSION_DONE = 32;
 export const EVENT_DROP = 64;
 export const EVENT_BALLOON = 128;
+export const EVENT_ON_FIRE = 256;
+export const EVENT_NEAR_MISS = 512;
 
 function clamp(v, lo, hi) {
   return v < lo ? lo : v > hi ? hi : v;
@@ -145,6 +150,14 @@ export function createWorld(rand) {
     }
     return out;
   }
+  // Wind gusts in the ring run: two slow sines with seeded phases, so
+  // the push builds and fades over ~10-20 s. A pilot can see it coming
+  // on the HUD and correct; the autopilot crabs into it like the
+  // crosswind. Deterministic in time, so replays match.
+  const gust = { p1: rand() * 6.283, p2: rand() * 6.283 };
+  function gustAt(time) {
+    return GUST_AMP1 * Math.sin(time * GUST_FREQ1 + gust.p1) + GUST_AMP2 * Math.sin(time * GUST_FREQ2 + gust.p2);
+  }
 
   // Ground height at distance z: rolling hills that flatten into the
   // runway approach, then dead flat along the strip itself.
@@ -192,6 +205,11 @@ export function createWorld(rand) {
       messageT: 0,
       balloonBuzzed: false, // the balloon bonus pays once per flight
       maxCombo: 0, // best ring/zone streak in this flight
+      gust: 0, // current lateral wind in the ring run, m/s
+      greased: false, // the landing was a greaser (for the win fireworks)
+      nearMissed: false, // the bird-flock near-miss bonus already paid
+      onFireM1: false, // the ring-run ON FIRE bonus already paid
+      onFireM2: false, // the drop-run ON FIRE bonus already paid
       _fuelWarned: false,
     };
   }
@@ -212,6 +230,9 @@ export function createWorld(rand) {
     const zonesHit = state.zonesHit;
     const balloonBuzzed = state.balloonBuzzed;
     const maxCombo = state.maxCombo;
+    const onFireM1 = state.onFireM1;
+    const onFireM2 = state.onFireM2;
+    const nearMissed = state.nearMissed;
     reset();
     state.banked = banked;
     state.score = banked;
@@ -219,6 +240,9 @@ export function createWorld(rand) {
     state.zonesHit = zonesHit;
     state.balloonBuzzed = balloonBuzzed;
     state.maxCombo = maxCombo;
+    state.onFireM1 = onFireM1;
+    state.onFireM2 = onFireM2;
+    state.nearMissed = nearMissed;
     state.mission = mission;
     state.missionStart = state.time;
     state.z = mission === 2 ? MISSION_Z.ringsEnd : mission === 3 ? MISSION_Z.zonesEnd : 0;
@@ -310,6 +334,10 @@ export function createWorld(rand) {
     state.heading = clamp(state.heading + state.roll * TURN_RATE * dt * (state.speed / 70), 40, 140);
     const headRad = ((state.heading - 90) * Math.PI) / 180;
     let lateral = Math.sin(headRad) * state.speed;
+    // Gusts push the plane sideways through the ring run — slow enough
+    // to correct for, strong enough to feel. The HUD shows the wind.
+    state.gust = state.mission === 1 ? gustAt(state.time) : 0;
+    if (state.mission === 1) lateral += state.gust;
     if (state.z > 5000 && state.mission === 3) lateral += CROSSWIND;
     state.x = clamp(state.x + lateral * dt, -LATERAL_LIMIT, LATERAL_LIMIT);
     state.z += Math.cos(headRad) * state.speed * dt;
@@ -346,10 +374,20 @@ export function createWorld(rand) {
           const pts = SCORE_ZONE + SCORE_ZONE_STREAK * state.zoneStreak;
           state.zoneStreak += 1;
           state.maxCombo = Math.max(state.maxCombo, state.zoneStreak);
+          // ON FIRE: four drops in a row and the streak is paying a
+          // bonus — once per mission, with a fanfare.
+          let fireExtra = '';
+          if (!state.onFireM2 && state.zoneStreak >= ON_FIRE_ZONE_STREAK) {
+            state.onFireM2 = true;
+            state.score += SCORE_ON_FIRE;
+            state.scoreParts.bonus += SCORE_ON_FIRE;
+            events |= EVENT_ON_FIRE;
+            fireExtra = ` — ON FIRE +${SCORE_ON_FIRE}`;
+          }
           state.score += pts;
           state.scoreParts.zones += pts;
           events |= EVENT_ZONE;
-          say(`SUPPLY DELIVERED +${pts}`);
+          say(`SUPPLY DELIVERED +${pts}${fireExtra}`);
         }
       }
     }
@@ -400,7 +438,17 @@ export function createWorld(rand) {
             state.score += pts;
             state.scoreParts.rings += pts - (precise ? SCORE_RING_PRECISION : 0);
             events |= EVENT_RING;
-            say(`${r.golden ? 'GOLDEN RING' : `RING ${state.ringsHit}/${RING_COUNT}`} +${pts}${precise ? ' — DEAD CENTRE' : ''}`);
+            // ON FIRE: six rings in a row and the streak is paying a
+            // bonus — once per mission, with a fanfare.
+            let fireExtra = '';
+            if (!state.onFireM1 && state.streak >= ON_FIRE_RING_STREAK) {
+              state.onFireM1 = true;
+              state.score += SCORE_ON_FIRE;
+              state.scoreParts.bonus += SCORE_ON_FIRE;
+              events |= EVENT_ON_FIRE;
+              fireExtra = ` — ON FIRE +${SCORE_ON_FIRE}`;
+            }
+            say(`${r.golden ? 'GOLDEN RING' : `RING ${state.ringsHit}/${RING_COUNT}`} +${pts}${precise ? ' — DEAD CENTRE' : ''}${fireExtra}`);
           } else {
             state.streak = 0;
           }
@@ -418,6 +466,20 @@ export function createWorld(rand) {
           state.scoreParts.bonus += SCORE_BALLOON_BUZZ;
           events |= EVENT_BALLOON;
           say(`BALLOON BUZZ +${SCORE_BALLOON_BUZZ}`);
+        }
+      }
+      // Near-miss: thread the bird flock close enough to ruffle
+      // feathers — once per flight, a little thrill bonus.
+      if (!state.nearMissed) {
+        for (const b of birdsAt(state.time)) {
+          if (Math.hypot(state.x - b.x, state.alt - b.alt, state.z - b.z) < NEAR_MISS_DIST) {
+            state.nearMissed = true;
+            state.score += SCORE_NEAR_MISS;
+            state.scoreParts.bonus += SCORE_NEAR_MISS;
+            events |= EVENT_NEAR_MISS;
+            say(`CLOSE ONE! +${SCORE_NEAR_MISS}`);
+            break;
+          }
         }
       }
       if (state.z >= MISSION_Z.ringsEnd) {
@@ -448,6 +510,7 @@ export function createWorld(rand) {
           let extra = '';
           // Greased it: gentle, centred, no damage — the landing to brag about.
           if (vs <= LAND_GREASED_VS && Math.abs(state.x) <= RUNWAY.halfWidth * 0.5 && state.damage === 0) {
+            state.greased = true;
             state.score += SCORE_GREASED;
             state.scoreParts.bonus += SCORE_GREASED;
             state.landScore += SCORE_GREASED;
@@ -501,6 +564,7 @@ export function createWorld(rand) {
     birds,
     balloonAt,
     birdsAt,
+    gustAt,
     riverX,
     groundAt,
     reset,
