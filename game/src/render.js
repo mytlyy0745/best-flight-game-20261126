@@ -72,7 +72,7 @@ export function createRenderer(canvas) {
     // Sun with a soft glow, upper right — lower and warmer at dusk.
     const sx = w * 0.78;
     const sy = horizonY - h * (dusk ? 0.09 : 0.22);
-    const glow = ctx.createRadialGradient(sx, sy, 4, sx, sy, dusk ? 130 : 90);
+    const glow = ctx.createRadialGradient(sx, sy, 4, sx, sy, dusk ? 130 : 115);
     glow.addColorStop(0, dusk ? 'rgba(255,214,150,0.95)' : 'rgba(255,244,200,0.95)');
     glow.addColorStop(0.25, dusk ? 'rgba(255,170,90,0.6)' : 'rgba(255,220,140,0.55)');
     glow.addColorStop(1, dusk ? 'rgba(255,170,90,0)' : 'rgba(255,220,140,0)');
@@ -80,7 +80,7 @@ export function createRenderer(canvas) {
     ctx.fillRect(sx - 135, sy - 135, 270, 270);
     ctx.fillStyle = dusk ? '#ffe0a8' : '#fff6d8';
     ctx.beginPath();
-    ctx.arc(sx, sy, dusk ? 26 : 22, 0, Math.PI * 2);
+    ctx.arc(sx, sy, dusk ? 28 : 26, 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -90,7 +90,17 @@ export function createRenderer(canvas) {
     const speed = layer === 0 ? 0.05 : 0.11;
     // Far range is hazier and lighter than the near one (atmospheric
     // perspective), so the ridge reads as distance, not a flat wall.
-    const col = layer === 0 ? 'rgba(110,136,162,0.62)' : 'rgba(96,122,150,0.6)';
+    // A vertical gradient (light crest, darker base) gives the range
+    // volume instead of one flat fill.
+    const mg = ctx.createLinearGradient(0, horizonY - 120, 0, horizonY + 2);
+    if (layer === 0) {
+      mg.addColorStop(0, 'rgba(172,192,214,0.8)');
+      mg.addColorStop(1, 'rgba(110,136,162,0.62)');
+    } else {
+      mg.addColorStop(0, 'rgba(126,150,176,0.72)');
+      mg.addColorStop(1, 'rgba(96,122,150,0.6)');
+    }
+    ctx.fillStyle = mg;
     // Sample the ridge first so snow caps can sit on its peaks.
     const ridge = [];
     for (let x = 0; x <= w; x += 16) {
@@ -98,7 +108,6 @@ export function createRenderer(canvas) {
       const y = horizonY - base - amp * Math.abs(Math.sin(wx * 0.004) * 0.7 + Math.sin(wx * 0.011 + 2) * 0.5) - amp * 0.4 * Math.sin(wx * 0.027 + 1);
       ridge.push([x, y]);
     }
-    ctx.fillStyle = col;
     ctx.beginPath();
     ctx.moveTo(0, horizonY + 2);
     for (const [x, y] of ridge) ctx.lineTo(x, y);
@@ -107,7 +116,7 @@ export function createRenderer(canvas) {
     ctx.fill();
     // Lit ridge edge: a faint highlight along the crest so the range
     // has a sunlit side instead of one flat fill.
-    ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     for (let k = 0; k < ridge.length; k += 1) {
@@ -116,17 +125,25 @@ export function createRenderer(canvas) {
       else ctx.lineTo(x, y);
     }
     ctx.stroke();
-    // Snow caps on the far range's peaks — big enough to read at a glance.
+    // Snow line on the far range: the crests that rise above it get
+    // snow, following the ridge's own shape. The ridge is a smooth
+    // rolling wave (local peaks are only ~1 px prominent), so capping
+    // individual peaks reads as a white rash — a snow line caps only
+    // the tallest humps, and each cap hugs its crest.
     if (layer === 0) {
-      ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      for (let i = 1; i < ridge.length - 1; i += 1) {
-        const [x, y] = ridge[i];
-        if (y < ridge[i - 1][1] - 1 && y < ridge[i + 1][1] - 1) {
-          ctx.beginPath();
-          ctx.ellipse(x, y + 6, 34, 11, 0, 0, Math.PI * 2);
-          ctx.fill();
-        }
+      const snowLine = horizonY - 105;
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      ctx.beginPath();
+      let started = false;
+      for (const [x, y] of ridge) {
+        const sy = Math.min(y, snowLine);
+        if (!started) { ctx.moveTo(x, sy); started = true; }
+        else ctx.lineTo(x, sy);
       }
+      ctx.lineTo(w, snowLine);
+      ctx.lineTo(0, snowLine);
+      ctx.closePath();
+      ctx.fill();
     }
   }
 
@@ -152,18 +169,27 @@ export function createRenderer(canvas) {
       // Keep the top strip clear so bright clouds never sit behind the
       // mission banner and wash out its text.
       if (sy - s * 0.32 < 110) continue;
-      // Shaded underside first, so the puff reads as a volume rather
-      // than a flat white sticker.
-      ctx.fillStyle = 'rgba(178,196,222,0.75)';
+      // Keep clouds out of the mountain band: a low cloud sitting on the
+      // ridge reads as a white blob on the mountain, not as a cloud.
+      if (sy > horizonY - 50) continue;
+      // Shaded underside first, darker and larger than the white body,
+      // so the puff reads as a volume rather than a flat white sticker.
+      ctx.fillStyle = 'rgba(146,166,198,0.85)';
       ctx.beginPath();
-      ctx.ellipse(sx, sy + s * 0.14, s * 0.95, s * 0.28, 0, 0, Math.PI * 2);
+      ctx.ellipse(sx, sy + s * 0.16, s * 0.98, s * 0.3, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.fillStyle = 'rgba(255,255,255,0.88)';
       ctx.beginPath();
       ctx.ellipse(sx, sy, s, s * 0.32, 0, 0, Math.PI * 2);
       ctx.ellipse(sx - s * 0.5, sy + s * 0.08, s * 0.6, s * 0.26, 0, 0, Math.PI * 2);
       ctx.ellipse(sx + s * 0.55, sy + s * 0.06, s * 0.65, s * 0.28, 0, 0, Math.PI * 2);
       ctx.ellipse(sx + s * 0.1, sy - s * 0.14, s * 0.55, s * 0.24, 0, 0, Math.PI * 2);
+      ctx.ellipse(sx + s * 0.3, sy - s * 0.2, s * 0.42, s * 0.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Warm sunlit top edge, so the lit side reads.
+      ctx.fillStyle = 'rgba(255,238,200,0.85)';
+      ctx.beginPath();
+      ctx.ellipse(sx - s * 0.1, sy - s * 0.18, s * 0.55, s * 0.13, 0, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -269,7 +295,7 @@ export function createRenderer(canvas) {
     ctx.fillStyle = '#bfefff';
   }
 
-  function drawHud(w, h, state, world) {
+  function drawHud(w, h, state, world, screen) {
     const ft = Math.round(state.alt * 3.281);
     const kts = Math.round(state.speed * 1.944);
     const hdg = Math.round(((state.heading % 360) + 360) % 360);
@@ -360,7 +386,9 @@ export function createRenderer(canvas) {
     ctx.lineTo(w / 2 + 20, h * 0.44);
     ctx.stroke();
     const target = mission === 1 ? world.nextRing() : mission === 2 ? world.nextZone() : null;
-    if (target) {
+    // No target pill on the title screen: it would sit behind the panel
+    // and read as a half-hidden label.
+    if (target && screen !== SCREEN_TITLE) {
       const dist = Math.max(0, Math.round(target.z - state.z));
       const label = mission === 1 ? `NEXT RING ${dist} m` : `NEXT ZONE ${dist} m`;
       ctx.textAlign = 'center';
@@ -372,7 +400,7 @@ export function createRenderer(canvas) {
       ctx.fillText(label, w / 2, h * 0.44 + 26);
       ctx.textAlign = 'left';
     }
-    if (mission === 3 && !state.landed) {
+    if (mission === 3 && !state.landed && screen !== SCREEN_TITLE) {
       const dist = Math.max(0, Math.round(RUNWAY.z0 - state.z));
       const label3 = state.z < RUNWAY.z0 ? `RUNWAY ${dist} m — SLOW DOWN, FLARE GENTLY` : 'ON THE STRIP — HOLD HER LEVEL';
       ctx.textAlign = 'center';
@@ -395,13 +423,13 @@ export function createRenderer(canvas) {
     ctx.restore();
   }
 
-  function overlay(w, h, lines, accent) {
-    ctx.fillStyle = 'rgba(6,12,22,0.38)';
+  function overlay(w, h, lines, accent, dy = 0) {
+    ctx.fillStyle = 'rgba(6,12,22,0.3)';
     ctx.fillRect(0, 0, w, h);
     const bw = Math.min(640, w - 60);
     const bh = 54 + lines.length * 30;
     const bx = (w - bw) / 2;
-    const by = (h - bh) / 2;
+    const by = (h - bh) / 2 + dy;
     ctx.fillStyle = 'rgba(8,18,30,0.82)';
     ctx.fillRect(bx, by, bw, bh);
     ctx.strokeStyle = accent;
@@ -508,11 +536,14 @@ export function createRenderer(canvas) {
         // as a patchwork of fields instead of one full-width stripe.
         // Seeded by the band index, so the same band always looks the same.
         if (!onRunway && !crossRoad) {
-          const patchCount = 2 + Math.floor(hash(i * 41 + 9) * 2);
+          const patchCount = 1 + Math.floor(hash(i * 41 + 9) * 2);
           for (let p = 0; p < patchCount; p += 1) {
-            const px = hash(i * 47 + p * 23 + 3) * w * 0.9;
-            const pw = w * (0.12 + hash(i * 19 + p * 31 + 7) * 0.22);
-            const pcol = PATCH_COLS[Math.floor(hash(i * 53 + p * 11 + 5) * PATCH_COLS.length)];
+            const px = hash(i * 47 + p * 23 + 3) * w * 0.85;
+            const pw = w * (0.2 + hash(i * 19 + p * 31 + 7) * 0.25);
+            const praw = PATCH_COLS[Math.floor(hash(i * 53 + p * 11 + 5) * PATCH_COLS.length)];
+            // Mute the patch toward the band's own field colour so plots
+            // read as variations of one farm, not foreign slabs.
+            const pcol = [Math.round(lerp(praw[0], field[0], 0.3)), Math.round(lerp(praw[1], field[1], 0.3)), Math.round(lerp(praw[2], field[2], 0.3))];
             ctx.fillStyle = mix3(pcol, SKY_HORIZON, haze * 0.7);
             ctx.fillRect(px, topY, pw, bandH);
             // Tall near bands: split the patch horizontally with a
@@ -601,6 +632,27 @@ export function createRenderer(canvas) {
           ctx.moveTo(cx + half, y);
           ctx.lineTo(cx + half, prevY);
           ctx.stroke();
+          // Expansion joints: a dark line across the strip at the middle
+          // of each band (25 m), so the near asphalt has rhythm instead
+          // of reading as one flat slab.
+          const jointY = topY + bandH / 2;
+          ctx.strokeStyle = 'rgba(40,40,48,0.3)';
+          ctx.lineWidth = Math.max(1, Math.min(3, half * 0.02));
+          ctx.beginPath();
+          ctx.moveTo(cx - half, jointY);
+          ctx.lineTo(cx + half, jointY);
+          ctx.stroke();
+          // Repair patches: darker rectangles on the near asphalt, seeded
+          // by the band, so the strip has texture even where the
+          // centreline and joints are out of frame.
+          if (bandH > 20) {
+            for (let k = 0; k < 2; k += 1) {
+              const rx2 = cx - half + hash(i * 83 + k * 29) * half * 2;
+              const rw2 = half * (0.2 + hash(i * 37 + k * 13) * 0.3);
+              ctx.fillStyle = 'rgba(60,60,70,0.25)';
+              ctx.fillRect(rx2, topY + bandH * (0.2 + k * 0.4), rw2, bandH * 0.25);
+            }
+          }
           // Threshold bars at the start of the strip: eight white bars
           // across the asphalt, so the runway's beginning reads clearly.
           if (z - RUNWAY.z0 < 60) {
@@ -692,9 +744,9 @@ export function createRenderer(canvas) {
         // from far away instead of being a faint ellipse on the ground.
         if (!zn.hit) {
           const beamTop = Math.max(horizonY - 180, horizonY + (camDepth * (camAlt - (world.groundAt(zn.z) + 150))) / d);
-          const bw = Math.min(12, Math.max(2, rx * 0.18));
+          const bw = Math.min(16, Math.max(2, rx * 0.18));
           const bg2 = ctx.createLinearGradient(0, gy, 0, beamTop);
-          bg2.addColorStop(0, `rgba(255,190,60,${0.35 + 0.15 * Math.sin(state.time * 4)})`);
+          bg2.addColorStop(0, `rgba(255,190,60,${0.45 + 0.15 * Math.sin(state.time * 4)})`);
           bg2.addColorStop(1, 'rgba(255,190,60,0)');
           ctx.fillStyle = bg2;
           ctx.fillRect(sx - bw / 2, beamTop, bw, gy - beamTop);
@@ -715,9 +767,15 @@ export function createRenderer(canvas) {
         }
       } else if (item.kind === 'tree') {
         const t = item.o;
+        if (d < 30) continue; // too close to read as a tree — it is beside the camera
         const sx = w / 2 + (camDepth * (t.x - camX)) / d;
         const gy = horizonY + (camDepth * (camAlt - world.groundAt(t.z))) / d;
-        const s = (camDepth * 9 * t.s) / d;
+        // Cap the on-screen size: a tree a few dozen metres ahead would
+        // otherwise blow up into a giant green disc filling the frame
+        // (the drop shot's foreground trees). Real trees this close are
+        // beside the camera, not in it.
+        let s = (camDepth * 9 * t.s) / d;
+        s = Math.min(s, 64);
         if (s < 2 || sx < -20 || sx > w + 20) continue;
         // Soft ground shadow so the tree sits on the field, not on top of it.
         ctx.fillStyle = 'rgba(0,0,0,0.16)';
@@ -1008,7 +1066,7 @@ export function createRenderer(canvas) {
         ctx.stroke();
       }
     }
-    drawHud(w, h, state, world);
+    drawHud(w, h, state, world, screen);
 
     if (screen === SCREEN_TITLE) {
       overlay(w, h, [
@@ -1018,7 +1076,7 @@ export function createRenderer(canvas) {
         'Space — drop a crate    P — pause    M — mute',
         best > 0 ? `Best score: ${best}` : 'Fly the rings, drop the supplies, land her.',
         'Press Space or click to fly',
-      ], '#ffd166');
+      ], '#ffd166', -70);
     } else if (screen === SCREEN_BRIEF) {
       const m = world.state.mission;
       const defs = [
