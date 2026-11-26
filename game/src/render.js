@@ -74,14 +74,16 @@ export function createRenderer(canvas) {
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
     // Sun with a soft glow, upper right — lower and warmer at dusk.
+    // Bigger and warmer than round 7's: the old glow was so subtle the
+    // disc still read as a flat pale sticker on the sky.
     const sx = w * 0.78;
     const sy = horizonY - h * (dusk ? 0.09 : 0.22);
-    const glow = ctx.createRadialGradient(sx, sy, 4, sx, sy, dusk ? 130 : 115);
+    const glow = ctx.createRadialGradient(sx, sy, 4, sx, sy, dusk ? 155 : 145);
     glow.addColorStop(0, dusk ? 'rgba(255,214,150,0.95)' : 'rgba(255,244,200,0.95)');
-    glow.addColorStop(0.25, dusk ? 'rgba(255,170,90,0.6)' : 'rgba(255,220,140,0.55)');
+    glow.addColorStop(0.25, dusk ? 'rgba(255,170,90,0.68)' : 'rgba(255,220,140,0.65)');
     glow.addColorStop(1, dusk ? 'rgba(255,170,90,0)' : 'rgba(255,220,140,0)');
     ctx.fillStyle = glow;
-    ctx.fillRect(sx - 135, sy - 135, 270, 270);
+    ctx.fillRect(sx - 160, sy - 160, 320, 320);
     // The disc itself is a radial gradient, bright in the middle and
     // warm at the rim — a flat disc read as a pale sticker on the sky.
     const disc = ctx.createRadialGradient(sx, sy, 2, sx, sy, dusk ? 28 : 26);
@@ -114,24 +116,30 @@ export function createRenderer(canvas) {
     // A vertical gradient (light crest, darker base) gives the range
     // volume instead of one flat fill.
     const mg = ctx.createLinearGradient(0, horizonY - 120, 0, horizonY + 2);
+    // The ridge base fades to transparent instead of ending in a hard
+    // horizontal line at horizonY+2: the old solid base plus the haze
+    // veil read as one flat pale stripe across the whole frame at the
+    // horizon (visible in every day shot). Now the range melts into
+    // the atmosphere instead of sitting on a ledge.
+    const fade = (c) => `rgba(${c[0]},${c[1]},${c[2]},0)`;
     if (dusk) {
-      // At dusk the ridge is a dark silhouette against the orange
-      // horizon, not a pale blue wave: the day-lit colours wash out
-      // against the violet sky (the land shot's ridge read as a pale
-      // curtain, not mountains).
       if (layer === 0) {
         mg.addColorStop(0, 'rgba(108,96,150,0.85)');
-        mg.addColorStop(1, 'rgba(74,64,116,0.7)');
+        mg.addColorStop(0.75, 'rgba(74,64,116,0.7)');
+        mg.addColorStop(1, fade([74, 64, 116]));
       } else {
         mg.addColorStop(0, 'rgba(88,78,128,0.8)');
-        mg.addColorStop(1, 'rgba(62,54,100,0.68)');
+        mg.addColorStop(0.75, 'rgba(62,54,100,0.68)');
+        mg.addColorStop(1, fade([62, 54, 100]));
       }
     } else if (layer === 0) {
       mg.addColorStop(0, 'rgba(172,192,214,0.8)');
-      mg.addColorStop(1, 'rgba(110,136,162,0.62)');
+      mg.addColorStop(0.75, 'rgba(110,136,162,0.62)');
+      mg.addColorStop(1, fade([110, 136, 162]));
     } else {
       mg.addColorStop(0, 'rgba(126,150,176,0.72)');
-      mg.addColorStop(1, 'rgba(96,122,150,0.6)');
+      mg.addColorStop(0.75, 'rgba(96,122,150,0.6)');
+      mg.addColorStop(1, fade([96, 122, 150]));
     }
     ctx.fillStyle = mg;
     // Sample the ridge first so snow caps can sit on its peaks.
@@ -206,12 +214,16 @@ export function createRenderer(canvas) {
   function drawHaze(w, horizonY) {
     // A soft pale veil straddling the horizon: it melts the hard line
     // where flat ground meets sky and gives the far world atmosphere.
-    const g = ctx.createLinearGradient(0, horizonY - 46, 0, horizonY + 26);
+    // Wider and softer than round 3's: the old 72 px veil with a 0.28
+    // peak read as its own pale stripe across the frame (every day
+    // shot showed a flat band at the horizon). A broader, gentler
+    // veil melts instead of striping.
+    const g = ctx.createLinearGradient(0, horizonY - 60, 0, horizonY + 40);
     g.addColorStop(0, 'rgba(246,232,200,0)');
-    g.addColorStop(0.55, 'rgba(246,232,200,0.28)');
+    g.addColorStop(0.55, 'rgba(246,232,200,0.2)');
     g.addColorStop(1, 'rgba(246,232,200,0)');
     ctx.fillStyle = g;
-    ctx.fillRect(0, horizonY - 46, w, 72);
+    ctx.fillRect(0, horizonY - 60, w, 100);
   }
 
   function drawClouds(w, horizonY, camZ, camX, clouds, camDepth) {
@@ -242,8 +254,16 @@ export function createRenderer(canvas) {
       ctx.ellipse(sx + s * 0.1, sy - s * 0.14, s * 0.55, s * 0.24, 0, 0, Math.PI * 2);
       ctx.ellipse(sx + s * 0.3, sy - s * 0.2, s * 0.42, s * 0.2, 0, 0, Math.PI * 2);
       ctx.fill();
+      // A second dome stacked on top: the old single dome plus shaded
+      // base read as one flat white ellipse from most angles — a puff
+      // needs a bump on top to read as a volume.
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.beginPath();
+      ctx.ellipse(sx - s * 0.15, sy - s * 0.28, s * 0.4, s * 0.2, 0, 0, Math.PI * 2);
+      ctx.ellipse(sx + s * 0.35, sy - s * 0.22, s * 0.3, s * 0.16, 0, 0, Math.PI * 2);
+      ctx.fill();
       // Warm sunlit top edge, so the lit side reads.
-      ctx.fillStyle = 'rgba(255,238,200,0.85)';
+      ctx.fillStyle = 'rgba(255,238,200,0.9)';
       ctx.beginPath();
       ctx.ellipse(sx - s * 0.1, sy - s * 0.18, s * 0.55, s * 0.13, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -559,7 +579,7 @@ export function createRenderer(canvas) {
     const fadeOut = clamp((WINGMAN_Z1 - z) / 300, 0, 1);
     const peel = clamp((z - 1900) / 300, 0, 1);
     return {
-      d: 100, // metres ahead of the camera, in formation — close enough
+      d: 88, // metres ahead of the camera, in formation — close enough
       // to read as a formation partner, not a speck at the frame edge
       x: state.x + 50 + peel * 130,
       alt: state.alt + 12 - peel * 40,
@@ -723,6 +743,27 @@ export function createRenderer(canvas) {
             // Hedgerow along the patch's left edge.
             ctx.fillStyle = mix3([42, 82, 46], SKY_HORIZON, haze * 0.7);
             ctx.fillRect(px, topY, Math.max(1, bandH * 0.1), bandH);
+          }
+        }
+        // Field boundaries running ALONG the track, drawn AFTER the
+        // patchwork so they read over the fields, not under them: ten
+        // rounds of horizontal texture (furrows, speckle, patchwork,
+        // splits) dressed the bands, but every mark ran across the
+        // frame, so the foreground still read as stacked horizontal
+        // slabs. These hedgerows are fixed in world space, so they
+        // converge with perspective — vertical structure that breaks
+        // the slabs and gives the near ground a sense of depth. The
+        // first version drew them before the patchwork and the patches
+        // covered them; the 2x crop showed only faint verticals.
+        if (!onRunway && !crossRoad) {
+          for (const bx of [-110, -70, 10, 45, 75]) {
+            const hx2 = w / 2 + (camDepth * (bx - camX)) / d;
+            const hw = Math.min(5, Math.max(1.5, (camDepth * 1.5) / d));
+            if (hx2 + hw < -20 || hx2 - hw > w + 20) continue;
+            ctx.fillStyle = mix3([42, 82, 46], SKY_HORIZON, haze * 0.7);
+            ctx.globalAlpha = 0.35;
+            ctx.fillRect(hx2 - hw / 2, topY, hw, bandH);
+            ctx.globalAlpha = 1;
           }
         }
         // Airfield grass: mowing stripes in world space — every other
@@ -1235,9 +1276,9 @@ export function createRenderer(canvas) {
         ctx.globalAlpha = wm.alpha;
         ctx.translate(sx, sy);
         ctx.rotate(wm.roll);
-        // A touch bigger than round 7: at 0.3 she read as a red cross,
-        // not a plane, in the play shot.
-        const ws = 0.36 * (Math.min(w, h) / 720);
+        // A touch bigger again: at 0.36 she still read as a small red
+        // cross in the play shot, not a plane in formation.
+        const ws = 0.42 * (Math.min(w, h) / 720);
         ctx.scale(ws, ws);
         ctx.fillStyle = '#c23b2e';
         ctx.beginPath();
