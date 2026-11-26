@@ -542,10 +542,16 @@ export function createRenderer(canvas) {
       ctx.fillText(label3, w / 2, h * 0.44 + 26);
       ctx.textAlign = 'left';
     }
-    // Flash message.
+    // Flash message: the big feedback line ("RING 6/12 +225", "TOUCHDOWN!
+    // +1100 ...") — on its own dark pill now, because the lower clouds
+    // sit right where it is drawn and yellow on white cloud reads faint
+    // (round 13's play shot: "ON FIRE +50" washed out against a cloud).
     if (state.messageT > 0 && state.message) {
       ctx.textAlign = 'center';
       ctx.font = 'bold 22px ui-monospace, Menlo, monospace';
+      const mtw = ctx.measureText(state.message).width;
+      ctx.fillStyle = 'rgba(8,18,30,0.6)';
+      ctx.fillRect(w / 2 - mtw / 2 - 12, h * 0.24 - 4, mtw + 24, 30);
       ctx.fillStyle = '#ffd166';
       ctx.fillText(state.message, w / 2, h * 0.24);
       ctx.textAlign = 'left';
@@ -1036,12 +1042,21 @@ export function createRenderer(canvas) {
           const beamTop = Math.max(horizonY - 180, horizonY + (camDepth * (camAlt - (world.groundAt(zn.z) + 150))) / d);
           // Wider and brighter: at 200+ m the old 16 px beam was a faint
           // thread, and the drop shot's target read as a small smudge.
+          // The beam tapers toward the top: the old constant-width rect
+          // read as a solid yellow pillar in the drop shot, not a shaft
+          // of light.
           const bw = Math.min(26, Math.max(3, rx * 0.28));
           const bg2 = ctx.createLinearGradient(0, gy, 0, beamTop);
           bg2.addColorStop(0, `rgba(255,190,60,${0.55 + 0.2 * Math.sin(state.time * 4)})`);
           bg2.addColorStop(1, 'rgba(255,190,60,0)');
           ctx.fillStyle = bg2;
-          ctx.fillRect(sx - bw / 2, beamTop, bw, gy - beamTop);
+          ctx.beginPath();
+          ctx.moveTo(sx - bw / 2, gy);
+          ctx.lineTo(sx + bw / 2, gy);
+          ctx.lineTo(sx + bw * 0.22, beamTop);
+          ctx.lineTo(sx - bw * 0.22, beamTop);
+          ctx.closePath();
+          ctx.fill();
         }
         ctx.fillStyle = zn.hit ? 'rgba(80,255,140,0.5)' : `rgba(255,190,60,${0.45 + 0.2 * Math.sin(state.time * 4)})`;
         ctx.beginPath();
@@ -1081,18 +1096,30 @@ export function createRenderer(canvas) {
           : [['#2c5a2e', '#356b33', '#3f7a3a'], ['#27512b', '#2f6030', '#3a7038']];
         const g = greens[Math.floor(hash(Math.floor(t.z) * 7 + Math.floor(t.x)) * greens.length)];
         if (t.round) {
-          // Round-canopy tree: two overlapping crowns over a trunk, so it
-          // reads as a volume from any distance.
+          // Round-canopy tree: a squashed main crown plus two offset
+          // side crowns over a thicker trunk, so it reads as a leafy
+          // volume instead of a green lollipop on a stick — the old
+          // perfect circle plus thin trunk read as a balloon in the
+          // drop shot's foreground, and the second crown sat mostly
+          // hidden behind the main disc. A darker shade under the
+          // crown gives it a lit top and a shadowed base.
           ctx.fillStyle = g[0];
           ctx.beginPath();
-          ctx.arc(sx, gy - s * 1.5, s * 0.85, 0, Math.PI * 2);
+          ctx.ellipse(sx, gy - s * 1.45, s * 0.85, s * 0.72, 0, 0, Math.PI * 2);
           ctx.fill();
           ctx.fillStyle = g[1];
           ctx.beginPath();
-          ctx.arc(sx - s * 0.35, gy - s * 1.15, s * 0.55, 0, Math.PI * 2);
+          ctx.ellipse(sx - s * 0.45, gy - s * 1.05, s * 0.55, s * 0.45, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.ellipse(sx + s * 0.42, gy - s * 1.0, s * 0.5, s * 0.42, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(0,0,0,0.14)';
+          ctx.beginPath();
+          ctx.ellipse(sx, gy - s * 1.05, s * 0.7, s * 0.3, 0, 0, Math.PI * 2);
           ctx.fill();
           ctx.fillStyle = '#5a3a22';
-          ctx.fillRect(sx - s * 0.1, gy - s * 0.7, s * 0.2, s * 0.7);
+          ctx.fillRect(sx - s * 0.12, gy - s * 0.75, s * 0.24, s * 0.75);
         } else {
           // Layered conifer: three stacked tiers, lightest at the top,
           // so a big near pine reads as a pine instead of a flat triangle.

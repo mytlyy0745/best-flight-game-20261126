@@ -131,9 +131,16 @@ export function createWorld(rand) {
       trees.push({ z: cz + (rand() * 2 - 1) * 60, x: cx + (rand() * 2 - 1) * 55, s: 0.7 + rand() * 1.0, round: true });
     }
   }
+  // Clouds sit lower now (190–330 m, was 300–460): the old high clouds
+  // projected above the frame or into the top strip the renderer skips
+  // to keep the mission banner readable, so the day sky read as empty
+  // blue with one or two small puffs near the sun. Lower clouds sit in
+  // the visible band at readable distance. The count stays 26: adding
+  // clouds would shift the seeded stream for the river, balloon, birds,
+  // gusts and drop wind that follow it, and this is a visual change.
   const clouds = [];
   for (let i = 0; i < 26; i += 1) {
-    clouds.push({ z: rand() * TRACK_LENGTH, x: (rand() * 2 - 1) * 500, y: 300 + rand() * 160, s: 1.1 + rand() * 2.0 });
+    clouds.push({ z: rand() * TRACK_LENGTH, x: (rand() * 2 - 1) * 500, y: 190 + rand() * 140, s: 1.3 + rand() * 2.2 });
   }
   // A winding river crosses the farmland (deterministic path from the
   // seeded phases, so the same seed always draws the same river).
