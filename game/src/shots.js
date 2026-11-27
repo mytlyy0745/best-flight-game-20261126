@@ -121,7 +121,17 @@ export function stageShot(name, world) {
   if (name === 'drop') {
     const r = flyUntil(world, (s, e) => (e & EVENT_DROP) !== 0, 180);
     if ((r.events & EVENT_DROP) !== 0) {
-      for (let i = 0; i < 135; i += 1) world.step(STEP, autopilot(world), false);
+      // Same 135 post-drop steps, so the falling crate is at the same
+      // place and the score anchor is untouched — but the last 45 steps
+      // bank hard right onto the drop run. The plane tilts ~40° and the
+      // horizon tips with it, so this frame reads as a banking turn
+      // instead of a fourth level chase shot.
+      for (let i = 0; i < 90; i += 1) world.step(STEP, autopilot(world), false);
+      for (let i = 0; i < 45; i += 1) {
+        const ctl = autopilot(world);
+        ctl.roll = 0.85;
+        world.step(STEP, ctl, false);
+      }
       for (const c of world.state.cratesFalling) c.z += 10;
     }
     return { screen: SCREEN_PLAY, best: world.state.score };
