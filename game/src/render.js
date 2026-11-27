@@ -1028,25 +1028,19 @@ export function createRenderer(canvas, effects) {
         const gy = horizonY + (camDepth * (camAlt - world.groundAt(zn.z))) / d;
         const rx = (camDepth * zn.r) / d;
         const ry = Math.max(2, rx * 0.16);
-        if (!zn.hit) {
-          const beamTop = Math.max(horizonY - 180, horizonY + (camDepth * (camAlt - (world.groundAt(zn.z) + 150))) / d);
-          const bw = Math.min(26, Math.max(3, rx * 0.28));
-          const bg2 = ctx.createLinearGradient(0, gy, 0, beamTop);
-          bg2.addColorStop(0, `rgba(255,190,60,${0.55 + 0.2 * Math.sin(state.time * 4)})`);
-          bg2.addColorStop(1, 'rgba(255,190,60,0)');
-          ctx.fillStyle = bg2;
-          ctx.beginPath();
-          ctx.moveTo(sx - bw / 2, gy);
-          ctx.lineTo(sx + bw / 2, gy);
-          ctx.lineTo(sx + bw * 0.22, beamTop);
-          ctx.lineTo(sx - bw * 0.22, beamTop);
-          ctx.closePath();
-          ctx.fill();
-        }
+        // R3: the golden light beam is gone — it read as a second,
+        // floating light source and fought the disc for attention.
         // A raised disc, not a flat paint patch: a darker wall ellipse peeks
         // out below the top face (the disc's thickness), then concentric
         // rings and a bright centre mark the bullseye, with a pale arc
         // catching the light on the near rim.
+        // R3: faint contact shadow, drawn first so the wall and top
+        // face cover its centre — only a soft dark halo peeks out
+        // around the disc, grounding it on the terrain.
+        ctx.fillStyle = 'rgba(0,0,0,0.18)';
+        ctx.beginPath();
+        ctx.ellipse(sx, gy + 2, rx * 1.08, Math.max(2, ry * 1.35), 0, 0, Math.PI * 2);
+        ctx.fill();
         const wall = zn.hit ? '#1d7a44' : '#a86f14';
         const rim = zn.hit ? '#50ff8c' : '#ffbe3c';
         const wallDrop = Math.max(2, ry * 0.42);
@@ -1584,13 +1578,19 @@ export function createRenderer(canvas, effects) {
       }
     }
     if (effects) effects.draw(ctx, { w, h, horizonY, camDepth, camX, camAlt, camZ, pitch: state.pitch, screen, dusk }, state, world);
-    drawHud(w, h, state, world, screen);
 
+    // R3: win celebration is drawn BEFORE the HUD, not after it, so
+    // every HUD panel and text line sits on top of the fireworks and
+    // stays crisp whatever phase a burst is in. Belt and braces with
+    // the HUD-safe burst band in effects.drawFireworks: even a burst
+    // at full stretch can no longer cross THR or any other readout.
     if (screen === SCREEN_WIN && state.greased) {
       const cols = ['#ffd166', '#ff5a4e', '#7dd7ff', '#7dffa8'];
       for (let i = 0; i < 4; i += 1) {
-        const fx = w * (0.12 + hash(i * 7 + 3) * 0.76);
-        const fy = h * (0.1 + hash(i * 11 + 5) * 0.22);
+        // Same HUD-safe band as drawFireworks (see effects.js): the
+        // old spots (e.g. red at 1048,159) also clipped the THR panel.
+        const fx = w * (0.26 + hash(i * 7 + 3) * 0.48);
+        const fy = h * (0.35 + hash(i * 11 + 5) * 0.42);
         const cycle = (animT * 0.4 + i * 0.37) % 1;
         const fr = 8 + cycle * 46;
         const fa = cycle < 0.7 ? 0.9 * (1 - cycle / 0.7) : 0;
@@ -1611,6 +1611,8 @@ export function createRenderer(canvas, effects) {
     }
 
     if (screen === SCREEN_WIN && effects) effects.drawFireworks(ctx, w, h, animT);
+
+    drawHud(w, h, state, world, screen);
 
     if (screen === SCREEN_TITLE) {
       overlay(w, h, [
@@ -1655,7 +1657,7 @@ export function createRenderer(canvas, effects) {
         `Landing bonus: +${state.landScore}`,
         `Best combo: x${state.maxCombo}`,
         'Press Space to fly again',
-      ], '#ffd166', -88, 34, 15, 3, 500, 0.8);
+      ], '#ffd166', -88, 34, 15, 3, 500, 0.84); // R3: 0.80 -> 0.84, less runway centreline showing through
       // Wordmark: the title frame was dropped from the sheet, so the game
       // name appears nowhere in the four frames. A small gold bug in the
       // free bottom-left corner of the win frame puts it back without
