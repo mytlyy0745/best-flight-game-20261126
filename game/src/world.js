@@ -34,9 +34,9 @@ export const EVENT_BULLSEYE = 2048;
 export const RUNWAY_MARKINGS = {
   threshold: { z0: RUNWAY.z0 + 4, z1: RUNWAY.z0 + 84, bars: 6, fill: 0.42 },
   aiming: [
-    { z: RUNWAY.z0 + 150, w: 4, off: 8, halfWindow: 50 },
-    { z: RUNWAY.z0 + 300, w: 4, off: 9, halfWindow: 50 },
-    { z: RUNWAY.z0 + 450, w: 4, off: 8, halfWindow: 50 },
+    { z: RUNWAY.z0 + 150, w: 2.5, off: 8, halfWindow: 50 },
+    { z: RUNWAY.z0 + 300, w: 2.5, off: 9, halfWindow: 50 },
+    { z: RUNWAY.z0 + 450, w: 2.5, off: 8, halfWindow: 50 },
   ],
   centreDash: { cycle: 60, on: 34, solidWithin: 160 },
 };

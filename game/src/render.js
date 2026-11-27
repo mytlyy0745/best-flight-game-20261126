@@ -600,9 +600,9 @@ export function createRenderer(canvas, effects) {
     } else {
       sy = h * 0.86;
       const d = (camDepth * altAbove) / Math.max(20, sy - horizonY);
-      rx = clamp((camDepth * 10) / d, 26, 85);
+      rx = clamp((camDepth * 10) / d, 26, 70);
       alpha = clamp(0.55 - altAbove * 0.0022, 0.12, 0.5);
-      alpha = Math.min(alpha, 0.13 + Math.max(0, altAbove - 60) * 0.002);
+      alpha = Math.min(alpha, (altAbove < 12 ? 0.10 : 0.13) + Math.max(0, altAbove - 60) * 0.002);
       const highFade = altAbove <= 60 ? 1 : clamp(1 - (altAbove - 60) / 120, 0.28, 1);
       alpha *= highFade;
       rx *= 0.55 + 0.45 * highFade;
@@ -653,6 +653,7 @@ export function createRenderer(canvas, effects) {
     let lastRunway = null;
     const centrePts = [];
     let centreBreak = true;
+    const aimSegs = [[], [], []];
     for (let i = segCount; i >= 0; i -= 1) {
       const d = Math.max(8, i * SEG_LEN);
       const z = camZ + d;
@@ -872,7 +873,7 @@ export function createRenderer(canvas, effects) {
             for (let k = 0; k < 4; k += 1) {
               const sx = stripL + hash(i * 97 + k * 19) * stripW;
               const sw = Math.max(1.5, (camDepth * (0.8 + hash(i * 97 + k * 19 + 7) * 1.4)) / d);
-              ctx.fillStyle = `rgba(46,42,44,${(0.07 + hash(i * 97 + k * 19 + 11) * 0.07).toFixed(3)})`;
+              ctx.fillStyle = `rgba(46,42,44,${(0.09 + hash(i * 97 + k * 19 + 11) * 0.08).toFixed(3)})`;
               ctx.fillRect(sx - sw / 2, topY, sw, bandH);
             }
             for (let k = 0; k < 2; k += 1) {
@@ -882,8 +883,8 @@ export function createRenderer(canvas, effects) {
               ctx.fillRect(sx - sw / 2, topY, sw, bandH);
             }
           }
-          for (const side of [-1, 1]) {
-            const tx = cx + side * ((camDepth * 6) / d);
+          for (const off of [-11, -6, 6, 11]) {
+            const tx = cx + (camDepth * off) / d;
             const tw = Math.min(14, Math.max(1.5, (camDepth * 2.2) / d));
             ctx.fillStyle = 'rgba(52,52,60,0.28)';
             ctx.fillRect(tx - tw / 2, topY, tw, bandH);
@@ -895,6 +896,11 @@ export function createRenderer(canvas, effects) {
             if (centreBreak) {
               centrePts.push({ x: cx, y: prevY, half, move: true });
               centreBreak = false;
+            }
+            if (d < 12 && centrePts.length) {
+              const q = centrePts[centrePts.length - 1];
+              centrePts.push({ x: (q.x + cx) / 2, y: (q.y + y) / 2, half });
+              centrePts.push({ x: (q.x * 3 + cx * 5) / 8, y: (q.y * 3 + y * 5) / 8, half, move: true });
             }
             centrePts.push({ x: cx, y, half });
           } else {
@@ -918,21 +924,19 @@ export function createRenderer(canvas, effects) {
             }
           }
           if (d > 20) {
-            for (const bar of RUNWAY_MARKINGS.aiming) {
+            for (let bi = 0; bi < 3; bi += 1) {
+              const bar = RUNWAY_MARKINGS.aiming[bi];
               if (Math.abs(zm - bar.z) <= bar.halfWindow) {
-                const bw = Math.min(40, Math.max(2, (camDepth * bar.w) / d));
+                const bw = Math.min(26, Math.max(2, (camDepth * bar.w) / d));
                 const bo = (camDepth * bar.off) / d;
-                if (cx + bo + bw < -20 || cx - bo - bw > w + 20) continue;
-                ctx.fillStyle = 'rgba(255,255,255,0.85)';
-                ctx.fillRect(cx - bo - bw, topY, bw, bandH);
-                ctx.fillRect(cx + bo, topY, bw, bandH);
+                aimSegs[bi].push({ t: topY, b: topY + bandH, l0: cx - bo - bw, l1: cx - bo, r0: cx + bo, r1: cx + bo + bw });
               }
             }
           }
           const shoulderW = Math.max(2, (camDepth * 10) / d);
           ctx.fillStyle = mix3([126, 162, 100], SKY_HORIZON, haze * 0.7);
           ctx.fillRect(cx - half - shoulderW, topY, shoulderW, bandH);
-          const taxiW = Math.max(2, (camDepth * 12) / d);
+          const taxiW = Math.min(16, Math.max(2, (camDepth * 12) / d));
           ctx.fillStyle = mix3([70, 70, 78], [130, 138, 150], haze * 0.25);
           ctx.fillRect(cx + half, topY, taxiW, bandH);
           const midY = (y + prevY) / 2;
@@ -985,6 +989,18 @@ export function createRenderer(canvas, effects) {
           ctx.moveTo(a.x, a.y);
           ctx.lineTo(b.x, b.y);
           ctx.stroke();
+        }
+      }
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      for (const g of aimSegs) {
+        if (g.length < 2) continue;
+        for (let s = 0; s < 2; s += 1) {
+          ctx.beginPath();
+          ctx.moveTo(g[0][s ? 'r0' : 'l0'], g[0].t);
+          for (const q of g) ctx.lineTo(q[s ? 'r0' : 'l0'], q.b);
+          for (let k = g.length - 1; k >= 0; k -= 1) ctx.lineTo(g[k][s ? 'r1' : 'l1'], g[k].b);
+          ctx.closePath();
+          ctx.fill();
         }
       }
       for (const light of [...RUNWAY_LIGHTS.near, ...RUNWAY_LIGHTS.far]) {
