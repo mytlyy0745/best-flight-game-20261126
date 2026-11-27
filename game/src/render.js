@@ -317,10 +317,14 @@ export function createRenderer(canvas, effects) {
   }
 
   function drawHud(w, h, state, world, screen) {
-    const ft = Math.round(state.alt * 3.281);
-    const kts = Math.round(state.speed * 1.944);
+    // On the win screen the plane is parked on the runway: the frozen
+    // touchdown values (140 KT, -648 FPM) would read as still flying,
+    // so the parked instruments all read zero instead.
+    const parked = screen === SCREEN_WIN;
+    const ft = parked ? 0 : Math.round(state.alt * 3.281);
+    const kts = parked ? 0 : Math.round(state.speed * 1.944);
     const hdg = Math.round(((state.heading % 360) + 360) % 360);
-    const vsFpm = screen === SCREEN_TITLE ? 0 : Math.round(state.vs * 196.85);
+    const vsFpm = parked || screen === SCREEN_TITLE ? 0 : Math.round(state.vs * 196.85);
     ctx.save();
     ctx.shadowColor = 'rgba(120,220,255,0.9)';
     ctx.shadowBlur = 8;
@@ -345,7 +349,7 @@ export function createRenderer(canvas, effects) {
     ctx.fillRect(w - 214, 92, 190 * clamp(1 - state.damage / 100, 0, 1), 12);
     ctx.strokeStyle = 'rgba(191,239,255,0.5)';
     ctx.strokeRect(w - 214.5, 91.5, 190, 12);
-    ctx.fillText(`THR ${Math.round(state.throttle * 100)}%`, w - 214, 110);
+    ctx.fillText(`THR ${parked ? 0 : Math.round(state.throttle * 100)}%`, w - 214, 110);
     }
     const mission = world.state.mission;
     let objective = '';
@@ -1430,6 +1434,30 @@ export function createRenderer(canvas, effects) {
         `Landing bonus: +${state.landScore}   Best combo: x${state.maxCombo}`,
         'Press Space to fly again',
       ], '#ffd166', -70, 40, 16, 3, 640, 0.88);
+      // Wordmark: the title frame was dropped from the sheet, so the game
+      // name appears nowhere in the four frames. A small gold bug in the
+      // free bottom-left corner of the win frame puts it back without
+      // covering the plane, the fireworks, or any HUD text. Drawn last
+      // so it stays crisp on top of the overlay dim.
+      const mark = 'SKY COURIER';
+      ctx.save();
+      ctx.font = 'bold 17px ui-monospace, Menlo, monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      if ('letterSpacing' in ctx) ctx.letterSpacing = '3px';
+      const markW = ctx.measureText(mark).width + 30;
+      const markX = 14;
+      const markY = h - 46;
+      ctx.fillStyle = 'rgba(8,18,30,0.66)';
+      ctx.fillRect(markX, markY, markW, 30);
+      ctx.strokeStyle = 'rgba(255,209,102,0.55)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(markX + 0.5, markY + 0.5, markW, 30);
+      ctx.shadowColor = 'rgba(255,209,102,0.9)';
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = '#ffd166';
+      ctx.fillText(mark, markX + 15, markY + 7);
+      ctx.restore();
     }
   }
 
