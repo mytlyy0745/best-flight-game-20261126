@@ -271,6 +271,9 @@ export function createEffects(seed) {
     }
   }
 
+  const FWX = [0.14, 0.86, 0.36, 0.11, 0.89, 0.55, 0.7];
+  const FWY = [0.48, 0.48, 0.74, 0.68, 0.68, 0.74, 0.74];
+
   return {
     update(dt, state, events, world) {
       if (!state || state.over === undefined) return;
@@ -333,8 +336,9 @@ export function createEffects(seed) {
     drawFireworks(ctx, w, h, time) {
       const cols = ['#ffd166', '#ff5a4e', '#7dd7ff', '#7dffa8', '#ff9de2', '#fff3b0', '#ff8c42'];
       for (let i = 0; i < 7; i += 1) {
-        const fx = w * (0.26 + hash(i * 7 + 3) * 0.48);
-        const fy = h * (0.35 + hash(i * 11 + 5) * 0.42);
+        const fx = w * (FWX[i] + (hash(i * 7 + 3) - 0.5) * 0.06);
+        const fy = h * (FWY[i] + (hash(i * 11 + 5) - 0.5) * 0.04);
+        const B = i < 2 ? 1.5 : 1;
         const cycle = (time * 0.4 + i * 0.31) % 1;
         if (cycle >= 0.8) continue;
         const alpha = 1 - cycle / 0.8;
@@ -344,26 +348,26 @@ export function createEffects(seed) {
           ctx.globalAlpha = (1 - cycle / 0.1) * 0.9;
           ctx.fillStyle = '#ffffff';
           ctx.beginPath();
-          ctx.arc(fx, fy, 5 + cycle * 30, 0, Math.PI * 2);
+          ctx.arc(fx, fy, (5 + cycle * 30) * B, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
         }
-        const glow = ctx.createRadialGradient(fx, fy, 1, fx, fy, 34 + cycle * 56);
+        const glow = ctx.createRadialGradient(fx, fy, 1, fx, fy, (34 + cycle * 56) * B);
         glow.addColorStop(0, col);
         glow.addColorStop(0.4, col);
         glow.addColorStop(1, 'rgba(255,255,255,0)');
         ctx.save();
-        ctx.globalAlpha = alpha * 0.5;
+        ctx.globalAlpha = alpha * 0.5 * B;
         ctx.fillStyle = glow;
-        ctx.fillRect(fx - 95, fy - 95, 190, 190);
+        ctx.fillRect(fx - 95 * B, fy - 95 * B, 190 * B, 190 * B);
         ctx.restore();
         ctx.save();
         ctx.globalAlpha = alpha;
         ctx.strokeStyle = col;
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = 2.5 * B;
         for (let k = 0; k < 28; k += 1) {
           const a = (k / 28) * Math.PI * 2 + i * 0.6 + hash(i * 17 + k) * 0.2;
-          const r0 = 12 + cycle * 64;
+          const r0 = (12 + cycle * 64) * B;
           const droop = cycle * cycle * 30;
           const x1 = fx + Math.cos(a) * r0 * 0.35;
           const y1 = fy + Math.sin(a) * r0 * 0.35 + droop * 0.35;
@@ -375,7 +379,7 @@ export function createEffects(seed) {
           ctx.stroke();
           ctx.fillStyle = '#ffffff';
           ctx.beginPath();
-          ctx.arc(x2, y2, 2, 0, Math.PI * 2);
+          ctx.arc(x2, y2, 2 * B, 0, Math.PI * 2);
           ctx.fill();
         }
         ctx.restore();
@@ -384,7 +388,7 @@ export function createEffects(seed) {
         ctx.fillStyle = '#ffffff';
         for (let k = 0; k < 10; k += 1) {
           const a = hash(i * 23 + k * 7) * Math.PI * 2;
-          const r = (14 + cycle * 78) * (0.8 + hash(i * 31 + k) * 0.4);
+          const r = (14 + cycle * 78) * B * (0.8 + hash(i * 31 + k) * 0.4);
           ctx.beginPath();
           ctx.arc(fx + Math.cos(a) * r, fy + Math.sin(a) * r + cycle * cycle * 34, 1.3, 0, Math.PI * 2);
           ctx.fill();
