@@ -604,7 +604,7 @@ export function createRenderer(canvas, effects) {
       alpha = clamp(0.55 - altAbove * 0.0022, 0.12, 0.5);
       alpha = Math.min(alpha, 0.13 + Math.max(0, altAbove - 60) * 0.002);
       const highFade = altAbove <= 60 ? 1 : clamp(1 - (altAbove - 60) / 120, 0.28, 1);
-      alpha *= highFade;
+      alpha = Math.max(alpha * highFade, 0.12);
       rx *= 0.55 + 0.45 * highFade;
       sx = w / 2 - clamp(altAbove * 0.35, 0, 90);
       layers = [[1.9, 0.1], [1.6, 0.2], [1.35, 0.32], [1.18, 0.46], [1.06, 0.65], [1, 1]];
@@ -1010,6 +1010,14 @@ export function createRenderer(canvas, effects) {
       }
     }
 
+    if (state.mission === 1) {
+      const fg = ctx.createLinearGradient(0, horizonY, 0, horizonY + 110);
+      fg.addColorStop(0, 'rgba(24,44,28,0.18)');
+      fg.addColorStop(1, 'rgba(24,44,28,0)');
+      ctx.fillStyle = fg;
+      ctx.fillRect(0, horizonY, w, 110);
+    }
+
     const pendingTags = [];
     let nearestSkyCrateD = Infinity;
     for (const c of world.course.skyCrates) {
@@ -1274,7 +1282,7 @@ export function createRenderer(canvas, effects) {
         const rr = (camDepth * r.r) / d;
         if (rr < 3 || sx < -rr || sx > w + rr) continue;
         ctx.save();
-        ctx.globalAlpha = d > 320 ? 0.55 : 1;
+        ctx.globalAlpha = d > 320 ? 0.35 : 1;
         const col = r.hit ? '#50ff8c' : r.passed ? 'rgba(255,90,78,0.55)' : r.golden ? '#ffb020' : '#ffc93c';
         ctx.lineWidth = Math.max(2, rr * 0.14);
         ctx.strokeStyle = col;
@@ -1453,7 +1461,7 @@ export function createRenderer(canvas, effects) {
           const crateTop = sy - s * 3.1;
           const crateBot = sy + s;
           if (crateBot > planeCy - 105 && crateTop < planeCy + 45 && sx - s < w / 2 + 30 && sx + s > w / 2 - 30) {
-            sx += (w / 2 + 38) - (sx - s);
+            sx += (w / 2 + 78) - (sx - s);
           }
         }
         if (!c.taken) {
@@ -1607,8 +1615,8 @@ export function createRenderer(canvas, effects) {
       for (const side of [-1, 1]) {
         const x0 = cx + side * 118 * scale;
         const y0 = cy + 12 * scale;
-        const g2 = ctx.createLinearGradient(x0, y0, x0 + side * 14 * scale, y0 + 90 * scale);
-        g2.addColorStop(0, 'rgba(255,255,255,0.28)');
+        const g2 = ctx.createLinearGradient(x0, y0, x0 + side * 14 * scale, y0 + 55 * scale);
+        g2.addColorStop(0, 'rgba(255,255,255,0.2)');
         g2.addColorStop(1, 'rgba(255,255,255,0)');
         ctx.strokeStyle = g2;
         ctx.lineWidth = 2.5 * scale;
@@ -1618,7 +1626,7 @@ export function createRenderer(canvas, effects) {
         ctx.stroke();
       }
     }
-    if (effects) effects.draw(ctx, { w, h, horizonY, camDepth, camX, camAlt, camZ, pitch: state.pitch, screen, dusk }, state, world);
+    if (effects) effects.draw(ctx, { w, h, horizonY, camDepth, camX, camAlt, camZ, pitch: state.pitch, screen, dusk }, state.mission === 1 ? { ...state, speed: 62, throttle: 0.15 } : state, world);
 
     if (screen === SCREEN_WIN && state.greased) {
       const cols = ['#ffd166', '#ff5a4e', '#7dd7ff', '#7dffa8'];
