@@ -11,7 +11,7 @@ const EVENT_CRATE = 1024;
 const MAX_PARTICLES = 500;
 const TRAIL_POINTS = 11; // contrail samples streaming off each wingtip
 const RING_SPARKLES = 9; // sparkles orbiting each near ring
-const RAIN_DROPS = 130; // rain streaks in the storm landing
+const RAIN_DROPS = 95; // rain streaks in the storm landing
 const MOTES = 42; // golden airborne motes drifting in the daylight
 const BURST_LIFE = 0.9; // seconds a ring/crate burst stays visible
 
