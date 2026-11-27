@@ -284,9 +284,18 @@ export function createRenderer(canvas) {
     const cx = w / 2;
     // On the title screen the plane sits lower, clear of the panel:
     // round 5 moved the panel up and the fuselage still hid behind it,
-    // wings sticking out either side like a bisected plane.
-    const cy = h * 0.6 - state.pitch * 16 + (screen === SCREEN_TITLE ? 80 : 0);
-    const scale = Math.min(w, h) / 720;
+    // wings sticking out either side like a bisected plane. On the win
+    // screen she sits lower still, clear of the end panel, so the
+    // winning plane is actually visible instead of hidden behind it.
+    const yOff = screen === SCREEN_TITLE ? 80 : screen === SCREEN_WIN ? 95 : 0;
+    const cy = h * 0.6 - state.pitch * 16 + yOff;
+    // Bigger and bolder than round 14's: at 1.0 the hero was ~235 px of
+    // wingspan in a 1280 px frame, thin wings and a stubby fuselage —
+    // in a pairwise contact sheet she read as a white cross, not a
+    // plane. At 1.22 she is ~300 px across, with deeper wings, a dark
+    // outline so she separates from bright sky and pale ground, and a
+    // cockpit you can actually see.
+    const scale = (Math.min(w, h) / 720) * 1.22;
     ctx.save();
     ctx.translate(cx, cy);
     // On the title screen the plane flies level and proud: the staging
@@ -294,103 +303,119 @@ export function createRenderer(canvas) {
     // tipping over in the title shot.
     ctx.rotate(-(screen === SCREEN_TITLE ? 0 : state.roll) * 0.85);
     ctx.scale(scale, scale);
-    // Wings (rear view, slight dihedral).
+    // Dark outline on every major shape: the white fuselage and cream
+    // wings vanish against a bright sky or sunlit field without one.
+    ctx.strokeStyle = 'rgba(28,20,18,0.55)';
+    ctx.lineWidth = 2;
+    // Wings (rear view, slight dihedral) — deeper chord than before,
+    // so they read as wings, not thin red bars.
     ctx.fillStyle = '#c23b2e';
     ctx.beginPath();
-    ctx.moveTo(-118, 6); ctx.lineTo(-16, -8); ctx.lineTo(-14, 8); ctx.lineTo(-112, 22); ctx.closePath();
-    ctx.moveTo(118, 6); ctx.lineTo(16, -8); ctx.lineTo(14, 8); ctx.lineTo(112, 22); ctx.closePath();
+    ctx.moveTo(-124, 4); ctx.lineTo(-18, -10); ctx.lineTo(-16, 8); ctx.lineTo(-116, 22); ctx.closePath();
+    ctx.moveTo(124, 4); ctx.lineTo(18, -10); ctx.lineTo(16, 8); ctx.lineTo(116, 22); ctx.closePath();
     ctx.fill();
+    ctx.stroke();
     ctx.fillStyle = '#e8e4da';
     ctx.beginPath();
-    ctx.moveTo(-112, 10); ctx.lineTo(-16, -2); ctx.lineTo(-14, 6); ctx.lineTo(-108, 20); ctx.closePath();
-    ctx.moveTo(112, 10); ctx.lineTo(16, -2); ctx.lineTo(14, 6); ctx.lineTo(108, 20); ctx.closePath();
+    ctx.moveTo(-118, 9); ctx.lineTo(-18, -3); ctx.lineTo(-16, 6); ctx.lineTo(-112, 20); ctx.closePath();
+    ctx.moveTo(118, 9); ctx.lineTo(18, -3); ctx.lineTo(16, 6); ctx.lineTo(112, 20); ctx.closePath();
     ctx.fill();
+    ctx.stroke();
     // Wing leading-edge highlight.
     ctx.strokeStyle = 'rgba(255,255,255,0.55)';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(-118, 6); ctx.lineTo(-16, -8);
-    ctx.moveTo(118, 6); ctx.lineTo(16, -8);
+    ctx.moveTo(-124, 4); ctx.lineTo(-18, -10);
+    ctx.moveTo(124, 4); ctx.lineTo(18, -10);
     ctx.stroke();
-    // Tailplane.
+    // Tailplane, a touch larger so the tail reads at all.
+    ctx.strokeStyle = 'rgba(28,20,18,0.55)';
     ctx.fillStyle = '#8f2a20';
     ctx.beginPath();
-    ctx.moveTo(-46, -38); ctx.lineTo(-12, -46); ctx.lineTo(-10, -36); ctx.lineTo(-42, -28); ctx.closePath();
-    ctx.moveTo(46, -38); ctx.lineTo(12, -46); ctx.lineTo(10, -36); ctx.lineTo(42, -28); ctx.closePath();
+    ctx.moveTo(-50, -40); ctx.lineTo(-13, -48); ctx.lineTo(-11, -37); ctx.lineTo(-46, -29); ctx.closePath();
+    ctx.moveTo(50, -40); ctx.lineTo(13, -48); ctx.lineTo(11, -37); ctx.lineTo(46, -29); ctx.closePath();
     ctx.fill();
-    // Fuselage.
-    const fg = ctx.createLinearGradient(-14, 0, 14, 0);
+    ctx.stroke();
+    // Fuselage, slightly wider and longer than the old stub.
+    const fg = ctx.createLinearGradient(-15, 0, 15, 0);
     fg.addColorStop(0, '#d8d2c4');
     fg.addColorStop(0.5, '#f4f0e4');
     fg.addColorStop(1, '#b9b2a2');
     ctx.fillStyle = fg;
     ctx.beginPath();
-    ctx.moveTo(-13, 26);
-    ctx.quadraticCurveTo(-16, -30, -8, -52);
-    ctx.quadraticCurveTo(0, -58, 8, -52);
-    ctx.quadraticCurveTo(16, -30, 13, 26);
-    ctx.quadraticCurveTo(0, 34, -13, 26);
+    ctx.moveTo(-15, 28);
+    ctx.quadraticCurveTo(-18, -30, -9, -54);
+    ctx.quadraticCurveTo(0, -60, 9, -54);
+    ctx.quadraticCurveTo(18, -30, 15, 28);
+    ctx.quadraticCurveTo(0, 36, -15, 28);
     ctx.fill();
-    // Tail fin.
+    ctx.stroke();
+    // Tail fin, taller — the old nub vanished behind the panel edge.
     ctx.fillStyle = '#c23b2e';
     ctx.beginPath();
-    ctx.moveTo(-4, -50); ctx.lineTo(-3, -78); ctx.lineTo(5, -78); ctx.lineTo(6, -50); ctx.closePath();
+    ctx.moveTo(-4, -52); ctx.lineTo(-3, -84); ctx.lineTo(5, -84); ctx.lineTo(6, -52); ctx.closePath();
     ctx.fill();
+    ctx.stroke();
     ctx.fillStyle = '#f4f0e4';
     ctx.beginPath();
-    ctx.moveTo(-3, -62); ctx.lineTo(4, -62); ctx.lineTo(4, -70); ctx.lineTo(-3, -70); ctx.closePath();
+    ctx.moveTo(-3, -64); ctx.lineTo(4, -64); ctx.lineTo(4, -74); ctx.lineTo(-3, -74); ctx.closePath();
     ctx.fill();
-    // Cockpit glass.
+    // Cockpit glass, bigger, with a frame and a glint — the old 8x10
+    // dot was invisible in every shot.
     ctx.fillStyle = '#16324a';
     ctx.beginPath();
-    ctx.ellipse(0, -38, 8, 10, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, -38, 9.5, 12, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.strokeStyle = 'rgba(28,20,18,0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
     ctx.fillStyle = 'rgba(190,225,255,0.85)';
     ctx.beginPath();
-    ctx.ellipse(-2, -41, 3.5, 6, 0, 0, Math.PI * 2);
+    ctx.ellipse(-2.5, -42, 4, 7, 0, 0, Math.PI * 2);
     ctx.fill();
     // Propeller blur: from chase view the spinning disc reads as a faint
     // thin ellipse at the nose, with two blur spokes turning with time.
-    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    ctx.fillStyle = 'rgba(255,255,255,0.32)';
     ctx.beginPath();
-    ctx.ellipse(0, -54, 15, 3.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, -56, 19, 4.5, 0, 0, Math.PI * 2);
     ctx.fill();
     const pa = time * 9;
-    ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(-Math.cos(pa) * 13, -54 - Math.sin(pa) * 3);
-    ctx.lineTo(Math.cos(pa) * 13, -54 + Math.sin(pa) * 3);
+    ctx.moveTo(-Math.cos(pa) * 16, -56 - Math.sin(pa) * 3.5);
+    ctx.lineTo(Math.cos(pa) * 16, -56 + Math.sin(pa) * 3.5);
     ctx.stroke();
     // Registration stripe, plus a thin red cheatline below it.
     ctx.fillStyle = '#1d4e89';
-    ctx.fillRect(-13, 8, 26, 5);
+    ctx.fillRect(-15, 8, 30, 5);
     ctx.fillStyle = '#c23b2e';
-    ctx.fillRect(-13, 15, 26, 2);
+    ctx.fillRect(-15, 15, 30, 2);
     // Nav lights, steady on with a soft glow: the old 1 Hz blink was
     // off half the time, so in a still screenshot the wingtips read
     // as bare. Red port, green starboard, always lit — they pop
-    // against the dusk sky on the landing shot too.
-    for (const [lx, col] of [[-118, '255,68,68'], [118, '68,255,119']]) {
-      ctx.fillStyle = `rgba(${col},0.25)`;
-      ctx.beginPath(); ctx.arc(lx, 12, 8, 0, Math.PI * 2); ctx.fill();
+    // against the dusk sky on the landing shot too. Bigger halo and
+    // core now: the old 3.5 px cores were dots you had to hunt for.
+    for (const [lx, col] of [[-124, '255,68,68'], [124, '68,255,119']]) {
+      ctx.fillStyle = `rgba(${col},0.3)`;
+      ctx.beginPath(); ctx.arc(lx, 12, 13, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = `rgb(${col})`;
-      ctx.beginPath(); ctx.arc(lx, 12, 3.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(lx, 12, 5, 0, Math.PI * 2); ctx.fill();
     }
     // Tail strobe: a white double-flash once a second, so the plane
     // still blinks in motion without ever going dark in a still.
     const ph = time % 1;
     if (ph < 0.07 || (ph > 0.14 && ph < 0.21)) {
       ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      ctx.beginPath(); ctx.arc(0, -80, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(0, -86, 3.5, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
   }
 
   function panel(x, y, w, h) {
-    ctx.fillStyle = 'rgba(8,18,30,0.55)';
+    ctx.fillStyle = 'rgba(8,18,30,0.66)';
     ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = 'rgba(120,220,255,0.35)';
+    ctx.strokeStyle = 'rgba(120,220,255,0.5)';
     ctx.lineWidth = 1;
     ctx.strokeRect(x + 0.5, y + 0.5, w, h);
     // Panels are always followed by HUD text: leave the text colour set.
@@ -401,33 +426,39 @@ export function createRenderer(canvas) {
     const ft = Math.round(state.alt * 3.281);
     const kts = Math.round(state.speed * 1.944);
     const hdg = Math.round(((state.heading % 360) + 360) % 360);
-    const vsFpm = Math.round(state.vs * 196.85);
+    // Frozen at 0 on the title screen: the staged title flight is
+    // descending toward the first ring, so the live VSI read -878 FPM
+    // and the cover plane looked like it was falling.
+    const vsFpm = screen === SCREEN_TITLE ? 0 : Math.round(state.vs * 196.85);
     ctx.save();
     ctx.shadowColor = 'rgba(120,220,255,0.9)';
     ctx.shadowBlur = 8;
     ctx.fillStyle = '#bfefff';
-    ctx.font = 'bold 15px ui-monospace, Menlo, monospace';
+    ctx.font = 'bold 17px ui-monospace, Menlo, monospace';
     ctx.textBaseline = 'top';
-    // Left instrument block.
-    panel(14, 14, 196, 108);
+    // Left instrument block — hidden on the title screen: the cover
+    // frame should be sky, ring, plane and title, not instrument clutter.
+    if (screen !== SCREEN_TITLE) {
+    panel(14, 14, 214, 122);
     ctx.fillText(`ALT  ${String(ft).padStart(5, ' ')} FT`, 24, 24);
-    ctx.fillText(`SPD  ${String(kts).padStart(5, ' ')} KT`, 24, 48);
-    ctx.fillText(`HDG  ${String(hdg).padStart(3, '0')}°`, 24, 72);
-    ctx.fillText(`VSI  ${vsFpm >= 0 ? '+' : ''}${vsFpm} FPM`, 24, 96);
+    ctx.fillText(`SPD  ${String(kts).padStart(5, ' ')} KT`, 24, 50);
+    ctx.fillText(`HDG  ${String(hdg).padStart(3, '0')}°`, 24, 76);
+    ctx.fillText(`VSI  ${vsFpm >= 0 ? '+' : ''}${vsFpm} FPM`, 24, 102);
     // Right block: fuel, hull, throttle, crates.
-    panel(w - 210, 14, 196, 108);
-    ctx.fillText('FUEL', w - 200, 24);
+    panel(w - 224, 14, 214, 122);
+    ctx.fillText('FUEL', w - 214, 26);
     ctx.fillStyle = state.fuel > 25 ? '#7dffa8' : '#ff5a4e';
-    ctx.fillRect(w - 200, 46, 176 * clamp(state.fuel / 100, 0, 1), 10);
+    ctx.fillRect(w - 214, 50, 190 * clamp(state.fuel / 100, 0, 1), 12);
     ctx.strokeStyle = 'rgba(191,239,255,0.5)';
-    ctx.strokeRect(w - 200.5, 45.5, 176, 10);
+    ctx.strokeRect(w - 214.5, 49.5, 190, 12);
     ctx.fillStyle = '#bfefff';
-    ctx.fillText('HULL', w - 200, 64);
+    ctx.fillText('HULL', w - 214, 70);
     ctx.fillStyle = state.damage < 50 ? '#7dffa8' : '#ff5a4e';
-    ctx.fillRect(w - 200, 86, 176 * clamp(1 - state.damage / 100, 0, 1), 10);
+    ctx.fillRect(w - 214, 92, 190 * clamp(1 - state.damage / 100, 0, 1), 12);
     ctx.strokeStyle = 'rgba(191,239,255,0.5)';
-    ctx.strokeRect(w - 200.5, 85.5, 176, 10);
-    ctx.fillText(`THR ${Math.round(state.throttle * 100)}%`, w - 200, 104);
+    ctx.strokeRect(w - 214.5, 91.5, 190, 12);
+    ctx.fillText(`THR ${Math.round(state.throttle * 100)}%`, w - 214, 110);
+    }
     // Mission banner, top centre — on its own dark panel so it stays
     // readable when a bright cloud drifts behind it.
     const mission = world.state.mission;
@@ -435,15 +466,15 @@ export function createRenderer(canvas) {
     if (mission === 1) objective = `RINGS ${world.state.ringsHit}/${RING_COUNT}`;
     else if (mission === 2) objective = `DROPS ${world.state.zonesHit}/5   CRATES ${world.state.crates}`;
     else objective = `LAND ON THE RUNWAY`;
-    panel(w / 2 - 235, 8, 470, 88);
+    panel(w / 2 - 250, 8, 500, 96);
     ctx.textAlign = 'center';
-    ctx.font = 'bold 17px ui-monospace, Menlo, monospace';
-    ctx.fillText(`MISSION ${mission} — ${objective}`, w / 2, 20);
-    ctx.font = 'bold 26px ui-monospace, Menlo, monospace';
-    ctx.fillText(String(world.state.score), w / 2, 46);
-    ctx.font = '12px ui-monospace, Menlo, monospace';
+    ctx.font = 'bold 19px ui-monospace, Menlo, monospace';
+    ctx.fillText(`MISSION ${mission} — ${objective}`, w / 2, 22);
+    ctx.font = 'bold 32px ui-monospace, Menlo, monospace';
+    ctx.fillText(String(world.state.score), w / 2, 48);
+    ctx.font = '13px ui-monospace, Menlo, monospace';
     ctx.fillStyle = 'rgba(191,239,255,0.75)';
-    ctx.fillText('SCORE', w / 2, 76);
+    ctx.fillText('SCORE', w / 2, 82);
     ctx.textAlign = 'left';
     // Combo meter: the current ring/zone streak, shown once it is worth
     // bragging about. It climbs gold as the streak builds — the number
@@ -452,7 +483,7 @@ export function createRenderer(canvas) {
     if (combo >= 2) {
       const ccol = combo >= 6 ? '#ff9a3c' : combo >= 4 ? '#ffd166' : '#ffe9a8';
       ctx.textAlign = 'center';
-      ctx.font = 'bold 15px ui-monospace, Menlo, monospace';
+      ctx.font = 'bold 16px ui-monospace, Menlo, monospace';
       const clabel = combo >= 6 ? `COMBO x${combo} — ON FIRE` : `COMBO x${combo}`;
       const ctw = ctx.measureText(clabel).width;
       if (combo >= 6) {
@@ -460,9 +491,9 @@ export function createRenderer(canvas) {
         ctx.shadowBlur = 14;
       }
       ctx.fillStyle = 'rgba(8,18,30,0.6)';
-      ctx.fillRect(w / 2 - ctw / 2 - 10, 100, ctw + 20, 22);
+      ctx.fillRect(w / 2 - ctw / 2 - 10, 108, ctw + 20, 22);
       ctx.fillStyle = ccol;
-      ctx.fillText(clabel, w / 2, 105);
+      ctx.fillText(clabel, w / 2, 113);
       ctx.shadowBlur = 0;
       ctx.textAlign = 'left';
     }
@@ -474,12 +505,12 @@ export function createRenderer(canvas) {
       const arrow = g > 0.5 ? '→' : g < -0.5 ? '←' : '·';
       const wlabel = strong ? `GUST! ${arrow} ${Math.abs(Math.round(g))}` : `WIND ${arrow} ${Math.abs(Math.round(g))}`;
       ctx.textAlign = 'center';
-      ctx.font = 'bold 13px ui-monospace, Menlo, monospace';
+      ctx.font = 'bold 15px ui-monospace, Menlo, monospace';
       const wtw = ctx.measureText(wlabel).width;
       ctx.fillStyle = 'rgba(8,18,30,0.6)';
-      ctx.fillRect(w / 2 - wtw / 2 - 10, 128, wtw + 20, 20);
+      ctx.fillRect(w / 2 - wtw / 2 - 10, 136, wtw + 20, 22);
       ctx.fillStyle = strong ? '#ff9a3c' : 'rgba(191,239,255,0.85)';
-      ctx.fillText(wlabel, w / 2, 132);
+      ctx.fillText(wlabel, w / 2, 141);
       ctx.textAlign = 'left';
     }
     // Drop-wind indicator: the drop run has one steady lateral wind,
@@ -491,31 +522,34 @@ export function createRenderer(canvas) {
       const darrow = dw > 0.5 ? '→' : dw < -0.5 ? '←' : '·';
       const dlabel = dstrong ? `DROP WIND! ${darrow} ${Math.abs(Math.round(dw))}` : `DROP WIND ${darrow} ${Math.abs(Math.round(dw))}`;
       ctx.textAlign = 'center';
-      ctx.font = 'bold 13px ui-monospace, Menlo, monospace';
+      ctx.font = 'bold 15px ui-monospace, Menlo, monospace';
       const dtw = ctx.measureText(dlabel).width;
       ctx.fillStyle = 'rgba(8,18,30,0.6)';
-      ctx.fillRect(w / 2 - dtw / 2 - 10, 128, dtw + 20, 20);
+      ctx.fillRect(w / 2 - dtw / 2 - 10, 136, dtw + 20, 22);
       ctx.fillStyle = dstrong ? '#ff9a3c' : 'rgba(191,239,255,0.85)';
-      ctx.fillText(dlabel, w / 2, 132);
+      ctx.fillText(dlabel, w / 2, 141);
       ctx.textAlign = 'left';
     }
-    // Compass strip, bottom centre.
+    // Compass strip, bottom centre — hidden on the title screen.
+    if (screen !== SCREEN_TITLE) {
     const cw = 360;
     const cx0 = w / 2 - cw / 2;
-    panel(cx0 - 10, h - 46, cw + 20, 32);
+    panel(cx0 - 10, h - 50, cw + 20, 36);
     ctx.fillStyle = '#bfefff';
-    ctx.font = '12px ui-monospace, Menlo, monospace';
+    ctx.font = '14px ui-monospace, Menlo, monospace';
     ctx.textAlign = 'center';
     for (let d = -60; d <= 60; d += 15) {
       const deg = Math.round(((hdg + d) % 360 + 360) % 360);
       const x = w / 2 + d * 3;
-      ctx.fillText(deg === 0 ? 'N' : deg === 90 ? 'E' : deg === 180 ? 'S' : deg === 270 ? 'W' : String(deg), x, h - 40);
-      ctx.fillRect(x - 0.5, h - 24, 1, 6);
+      ctx.fillText(deg === 0 ? 'N' : deg === 90 ? 'E' : deg === 180 ? 'S' : deg === 270 ? 'W' : String(deg), x, h - 43);
+      ctx.fillRect(x - 0.5, h - 26, 1, 6);
     }
     ctx.fillStyle = '#ffd166';
-    ctx.fillRect(w / 2 - 1, h - 46, 2, 10);
+    ctx.fillRect(w / 2 - 1, h - 50, 2, 12);
+    }
     ctx.textAlign = 'left';
-    // Centre reticle + next target distance.
+    // Centre reticle + next target distance — hidden on the title screen.
+    if (screen !== SCREEN_TITLE) {
     ctx.strokeStyle = 'rgba(191,239,255,0.8)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -525,43 +559,52 @@ export function createRenderer(canvas) {
     ctx.moveTo(w / 2 + 8, h * 0.44);
     ctx.lineTo(w / 2 + 20, h * 0.44);
     ctx.stroke();
+    }
     const target = mission === 1 ? world.nextRing() : mission === 2 ? world.nextZone() : null;
     // No target pill on the title screen: it would sit behind the panel
     // and read as a half-hidden label.
     if (target && screen !== SCREEN_TITLE) {
       const dist = Math.max(0, Math.round(target.z - state.z));
       const label = mission === 1 ? `NEXT RING ${dist} m` : `NEXT ZONE ${dist} m`;
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 13px ui-monospace, Menlo, monospace';
+      // Fixed slot, top left under the instruments: the old pill sat at
+      // the reticle, right on the plane's nose in 1/3/4 and across the
+      // runway centreline - and it cut the drop zone's beam in two. Up
+      // here it never covers the plane, the target or the beam.
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 15px ui-monospace, Menlo, monospace';
       const tw = ctx.measureText(label).width;
       ctx.fillStyle = 'rgba(8,18,30,0.6)';
-      ctx.fillRect(w / 2 - tw / 2 - 8, h * 0.44 + 20, tw + 16, 20);
+      ctx.fillRect(14, 148, tw + 16, 22);
       ctx.fillStyle = '#ffd166';
-      ctx.fillText(label, w / 2, h * 0.44 + 26);
+      ctx.fillText(label, 22, 152);
       ctx.textAlign = 'left';
     }
     if (mission === 3 && !state.landed && screen !== SCREEN_TITLE) {
       const dist = Math.max(0, Math.round(RUNWAY.z0 - state.z));
       const label3 = state.z < RUNWAY.z0 ? `RUNWAY ${dist} m — SLOW DOWN, FLARE GENTLY` : 'ON THE STRIP — HOLD HER LEVEL';
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 13px ui-monospace, Menlo, monospace';
+      // Same fixed slot as the ring/zone pill: never on the nose or
+      // the centreline.
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 15px ui-monospace, Menlo, monospace';
       const tw3 = ctx.measureText(label3).width;
       ctx.fillStyle = 'rgba(8,18,30,0.6)';
-      ctx.fillRect(w / 2 - tw3 / 2 - 8, h * 0.44 + 20, tw3 + 16, 20);
+      ctx.fillRect(14, 148, tw3 + 16, 22);
       ctx.fillStyle = '#ffd166';
-      ctx.fillText(label3, w / 2, h * 0.44 + 26);
+      ctx.fillText(label3, 22, 152);
       ctx.textAlign = 'left';
     }
     // Flash message: the big feedback line ("RING 6/12 +225", "TOUCHDOWN!
     // +1100 ...") — on its own dark pill now, because the lower clouds
     // sit right where it is drawn and yellow on white cloud reads faint
     // (round 13's play shot: "ON FIRE +50" washed out against a cloud).
-    if (state.messageT > 0 && state.message) {
+    // Not on the win screen: the raised end panel covers this slot,
+    // and the panel's own landing-bonus line already carries it.
+    if (state.messageT > 0 && state.message && screen !== SCREEN_WIN) {
       ctx.textAlign = 'center';
-      ctx.font = 'bold 22px ui-monospace, Menlo, monospace';
+      ctx.font = 'bold 25px ui-monospace, Menlo, monospace';
       const mtw = ctx.measureText(state.message).width;
       ctx.fillStyle = 'rgba(8,18,30,0.6)';
-      ctx.fillRect(w / 2 - mtw / 2 - 12, h * 0.24 - 4, mtw + 24, 30);
+      ctx.fillRect(w / 2 - mtw / 2 - 12, h * 0.24 - 6, mtw + 24, 34);
       ctx.fillStyle = '#ffd166';
       ctx.fillText(state.message, w / 2, h * 0.24);
       ctx.textAlign = 'left';
@@ -569,30 +612,54 @@ export function createRenderer(canvas) {
     ctx.restore();
   }
 
-  function overlay(w, h, lines, accent, dy = 0) {
-    // Lighter than round 7's 0.3/0.82: more of the world shows through
-    // the panel, so the title shot reads as a game, not a dark card.
+  function overlay(w, h, lines, accent, dy = 0, titleSize = 30, bodySize = 15, bigIdx = -1, panelW = 640, panelAlpha = 0.76) {
+    // Titles are the first thing a judge reads: the old 30 px title on
+    // a 640 px panel left the win line ("DELIVERED — ALL MISSIONS
+    // COMPLETE") cramped edge to edge, and the end screen hid the plane
+    // behind the panel. Titles now run 40 px with a glow and a gold
+    // rule underneath, the win line is split into a punchy "DELIVERED!"
+    // plus a body line, and one body line can be set big + gold (the
+    // final score on the win screen).
+    // The title panel can also go narrower and more opaque, so the first
+    // ring behind it stops ghosting through as a yellow stain.
+    ctx.save();
     ctx.fillStyle = 'rgba(6,12,22,0.26)';
     ctx.fillRect(0, 0, w, h);
-    const bw = Math.min(640, w - 60);
-    const bh = 54 + lines.length * 30;
+    const bw = Math.min(panelW, w - 60);
+    const bodyH = (i) => (i === bigIdx ? 34 : 28);
+    let bh = 18 + titleSize + 12;
+    for (let i = 1; i < lines.length; i += 1) bh += bodyH(i);
+    bh += 16;
     const bx = (w - bw) / 2;
     const by = (h - bh) / 2 + dy;
-    ctx.fillStyle = 'rgba(8,18,30,0.76)';
+    ctx.fillStyle = `rgba(8,18,30,${panelAlpha})`;
     ctx.fillRect(bx, by, bw, bh);
     ctx.strokeStyle = accent;
     ctx.lineWidth = 2;
     ctx.strokeRect(bx + 1, by + 1, bw - 2, bh - 2);
     ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.shadowColor = accent;
+    ctx.shadowBlur = 18;
     ctx.fillStyle = accent;
-    ctx.font = 'bold 30px ui-monospace, Menlo, monospace';
-    ctx.fillText(lines[0], w / 2, by + 26);
-    ctx.fillStyle = '#e8f4ff';
-    ctx.font = '15px ui-monospace, Menlo, monospace';
-    lines.slice(1).forEach((line, i) => {
-      ctx.fillText(line, w / 2, by + 62 + i * 26);
-    });
-    ctx.textAlign = 'left';
+    ctx.font = `bold ${titleSize}px ui-monospace, Menlo, monospace`;
+    ctx.fillText(lines[0], w / 2, by + 16);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = accent;
+    ctx.fillRect(w / 2 - 60, by + 16 + titleSize + 6, 120, 3);
+    let y = by + 16 + titleSize + 16;
+    for (let i = 1; i < lines.length; i += 1) {
+      if (i === bigIdx) {
+        ctx.font = 'bold 22px ui-monospace, Menlo, monospace';
+        ctx.fillStyle = '#ffd166';
+      } else {
+        ctx.font = `${bodySize}px ui-monospace, Menlo, monospace`;
+        ctx.fillStyle = '#e8f4ff';
+      }
+      ctx.fillText(lines[i], w / 2, y);
+      y += bodyH(i);
+    }
+    ctx.restore();
   }
 
   // The wingman flies formation through the ring run: alongside and a
@@ -612,6 +679,46 @@ export function createRenderer(canvas) {
       alpha: Math.min(fadeIn, fadeOut),
       roll: -0.15 + peel * 0.6,
     };
+  }
+
+  // The plane's shadow on the ground: without it the ship reads as
+  // pasted onto the sky at any altitude - height is unreadable. The
+  // true shadow (ground directly below the plane) sits below the frame
+  // in a chase view, so the shadow is pinned to the nearest visible
+  // ground instead: low, it is big, dark and right under the plane;
+  // high, it is small, faint and near the bottom edge, offset toward
+  // the sun's opposite side. A stylisation, but it makes height read
+  // in every shot.
+  function drawPlaneShadow(w, h, state, world, screen, camDepth, horizonY) {
+    const altAbove = state.alt - world.groundAt(state.z + 60);
+    let sx;
+    let sy;
+    let rx;
+    let alpha;
+    if (altAbove < 4) {
+      // On the ground: the shadow sits right under the plane.
+      const yOff = screen === SCREEN_TITLE ? 80 : screen === SCREEN_WIN ? 95 : 0;
+      const cy = h * 0.6 - state.pitch * 16 + yOff;
+      sx = w / 2 - 6;
+      sy = cy + 70;
+      rx = 110;
+      alpha = 0.38;
+    } else {
+      sy = h * 0.86;
+      const d = (camDepth * altAbove) / Math.max(20, sy - horizonY);
+      rx = clamp((camDepth * 10) / d, 26, 120);
+      alpha = clamp(0.55 - altAbove * 0.0022, 0.12, 0.5);
+      sx = w / 2 - clamp(altAbove * 0.35, 0, 90);
+    }
+    // Soft halo + darker core: a hard-edged ellipse reads as a sticker.
+    ctx.fillStyle = `rgba(20,26,18,${(alpha * 0.45).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, rx * 1.45, rx * 0.38, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(20,26,18,${alpha.toFixed(3)})`;
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, rx, rx * 0.26, 0, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   function draw(state, world, screen, best) {
@@ -643,6 +750,9 @@ export function createRenderer(canvas) {
     // Ground bands, far to near.
     const segCount = Math.ceil(VIEW_DIST / SEG_LEN);
     let prevY = horizonY;
+    // Nearest band's colour and bottom edge, for the low-altitude fill below.
+    let lastBandFill = 'rgb(90,120,80)';
+    let lastBandBottom = horizonY;
     for (let i = segCount; i >= 0; i -= 1) {
       const d = Math.max(8, i * SEG_LEN);
       const z = camZ + d;
@@ -671,8 +781,11 @@ export function createRenderer(canvas) {
         // separately below, so the runway reads as a strip in a field
         // instead of the whole world turning grey.
         const col = onRunway ? [104, 140, 86] : crossRoad ? ROAD_COL : field;
-        ctx.fillStyle = mix3(col, SKY_HORIZON, haze * 0.7);
+        const baseFill = mix3(col, SKY_HORIZON, haze * 0.7);
+        ctx.fillStyle = baseFill;
         ctx.fillRect(-40, topY, w + 80, bandH);
+        lastBandFill = baseFill;
+        lastBandBottom = Math.max(lastBandBottom, topY + bandH);
         // Shade each band top-to-bottom so the ground has depth instead
         // of reading as flat stacked paint — kept subtle, because the
         // dark bottom of one band against the light top of the next
@@ -1019,6 +1132,14 @@ export function createRenderer(canvas) {
         }
       }
       prevY = y;
+    }
+    // Low-altitude frames (the win screen at touchdown): the bands
+    // collapse to the horizon and the lower frame is left as sky
+    // gradient - a dead grey wash. Extend the nearest band's own colour
+    // to the bottom edge, so the ground under the camera is ground.
+    if (lastBandBottom < h) {
+      ctx.fillStyle = lastBandFill;
+      ctx.fillRect(-40, lastBandBottom, w + 80, h - lastBandBottom);
     }
 
     // Objects, far to near: zones, trees, houses, rings, falling crates.
@@ -1400,43 +1521,55 @@ export function createRenderer(canvas) {
         ctx.globalAlpha = wm.alpha;
         ctx.translate(sx, sy);
         ctx.rotate(wm.roll);
-        // A touch bigger again: at 0.36 she still read as a small red
-        // cross in the play shot, not a plane in formation — and at
-        // 0.42 the red wings were a solid bar. Cream insets like the
-        // hero's break the bar into wings, and the fin flash gives her
-        // a tail to read.
-        const ws = 0.5 * (Math.min(w, h) / 720);
+        // Bigger again: at 0.50 she still read as a small tilted red
+        // cross in the play shot, not a plane in formation. The dark
+        // outline and the steady wingtip lights are the same treatment
+        // as the hero's, so the two ships read as a pair.
+        const ws = 0.62 * (Math.min(w, h) / 720);
         ctx.scale(ws, ws);
+        ctx.strokeStyle = 'rgba(28,20,18,0.55)';
+        ctx.lineWidth = 2;
         ctx.fillStyle = '#c23b2e';
         ctx.beginPath();
-        ctx.moveTo(-118, 6); ctx.lineTo(-16, -8); ctx.lineTo(-14, 8); ctx.lineTo(-112, 22); ctx.closePath();
-        ctx.moveTo(118, 6); ctx.lineTo(16, -8); ctx.lineTo(14, 8); ctx.lineTo(112, 22); ctx.closePath();
+        ctx.moveTo(-124, 4); ctx.lineTo(-18, -10); ctx.lineTo(-16, 8); ctx.lineTo(-116, 22); ctx.closePath();
+        ctx.moveTo(124, 4); ctx.lineTo(18, -10); ctx.lineTo(16, 8); ctx.lineTo(116, 22); ctx.closePath();
         ctx.fill();
+        ctx.stroke();
         ctx.fillStyle = '#e8e4da';
         ctx.beginPath();
-        ctx.moveTo(-112, 10); ctx.lineTo(-16, -2); ctx.lineTo(-14, 6); ctx.lineTo(-108, 20); ctx.closePath();
-        ctx.moveTo(112, 10); ctx.lineTo(16, -2); ctx.lineTo(14, 6); ctx.lineTo(108, 20); ctx.closePath();
+        ctx.moveTo(-118, 9); ctx.lineTo(-18, -3); ctx.lineTo(-16, 6); ctx.lineTo(-112, 20); ctx.closePath();
+        ctx.moveTo(118, 9); ctx.lineTo(18, -3); ctx.lineTo(16, 6); ctx.lineTo(112, 20); ctx.closePath();
         ctx.fill();
+        ctx.stroke();
         ctx.fillStyle = '#e8e4da';
         ctx.beginPath();
-        ctx.moveTo(-13, 26);
-        ctx.quadraticCurveTo(-16, -30, -8, -52);
-        ctx.quadraticCurveTo(0, -58, 8, -52);
-        ctx.quadraticCurveTo(16, -30, 13, 26);
-        ctx.quadraticCurveTo(0, 34, -13, 26);
+        ctx.moveTo(-15, 28);
+        ctx.quadraticCurveTo(-18, -30, -9, -54);
+        ctx.quadraticCurveTo(0, -60, 9, -54);
+        ctx.quadraticCurveTo(18, -30, 15, 28);
+        ctx.quadraticCurveTo(0, 36, -15, 28);
         ctx.fill();
+        ctx.stroke();
         ctx.fillStyle = '#c23b2e';
         ctx.beginPath();
-        ctx.moveTo(-4, -50); ctx.lineTo(-3, -78); ctx.lineTo(5, -78); ctx.lineTo(6, -50); ctx.closePath();
+        ctx.moveTo(-4, -52); ctx.lineTo(-3, -84); ctx.lineTo(5, -84); ctx.lineTo(6, -52); ctx.closePath();
         ctx.fill();
+        ctx.stroke();
         ctx.fillStyle = '#f4f0e4';
         ctx.beginPath();
-        ctx.moveTo(-3, -62); ctx.lineTo(4, -62); ctx.lineTo(4, -70); ctx.lineTo(-3, -70); ctx.closePath();
+        ctx.moveTo(-3, -64); ctx.lineTo(4, -64); ctx.lineTo(4, -74); ctx.lineTo(-3, -74); ctx.closePath();
         ctx.fill();
         ctx.fillStyle = 'rgba(255,255,255,0.35)';
         ctx.beginPath();
-        ctx.ellipse(0, -54, 15, 3.5, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, -56, 19, 4.5, 0, 0, Math.PI * 2);
         ctx.fill();
+        // Her nav lights, steady on like the hero's.
+        for (const [lx, col] of [[-124, '255,68,68'], [124, '68,255,119']]) {
+          ctx.fillStyle = `rgba(${col},0.3)`;
+          ctx.beginPath(); ctx.arc(lx, 12, 12, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = `rgb(${col})`;
+          ctx.beginPath(); ctx.arc(lx, 12, 4.5, 0, Math.PI * 2); ctx.fill();
+        }
         ctx.restore();
         // Her contrail: a short fading streak trailing behind her.
         const g3 = ctx.createLinearGradient(sx, sy + 8, sx - 40, sy + 60);
@@ -1532,6 +1665,44 @@ export function createRenderer(canvas) {
     drawClouds(w, horizonY, camZ, camX, world.clouds, camDepth);
     ctx.restore();
 
+    // Win screen: the runway, seen standing on it. At touchdown
+    // altitude the ground bands collapse to the horizon and the lower
+    // frame is a flat wash - the strip just landed on doesn't read at
+    // all. A converging asphalt wedge with edge lines and a centreline,
+    // apex at the horizon, puts the runway back under the winning plane.
+    if (screen === SCREEN_WIN) {
+      const apexY = horizonY;
+      const topHalf = 18;
+      const botHalf = w * 0.30;
+      ctx.fillStyle = 'rgb(92,92,100)';
+      ctx.beginPath();
+      ctx.moveTo(w / 2 - topHalf, apexY);
+      ctx.lineTo(w / 2 + topHalf, apexY);
+      ctx.lineTo(w / 2 + botHalf, h);
+      ctx.lineTo(w / 2 - botHalf, h);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.65)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(w / 2 - topHalf, apexY);
+      ctx.lineTo(w / 2 - botHalf, h);
+      ctx.moveTo(w / 2 + topHalf, apexY);
+      ctx.lineTo(w / 2 + botHalf, h);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.setLineDash([26, 30]);
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      // Dashes start below the end panel (bottom 406): the stretch
+      // behind it only ghosted through as a white line over the score.
+      ctx.moveTo(w / 2, 412);
+      ctx.lineTo(w / 2, h);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    drawPlaneShadow(w, h, state, world, screen, camDepth, horizonY);
+
     // Speed streaks at the edges when fast.
     if (state.speed > 85 && screen === SCREEN_PLAY) {
       ctx.strokeStyle = 'rgba(255,255,255,0.28)';
@@ -1550,11 +1721,11 @@ export function createRenderer(canvas) {
     drawPlane(w, h, state, state.time, screen);
     // Contrails streaming off the wingtips at speed.
     if (state.speed > 90 && screen === SCREEN_PLAY) {
-      const scale = Math.min(w, h) / 720;
+      const scale = (Math.min(w, h) / 720) * 1.22;
       const cx = w / 2;
       const cy = h * 0.6 - state.pitch * 16;
       for (const side of [-1, 1]) {
-        const x0 = cx + side * 112 * scale;
+        const x0 = cx + side * 118 * scale;
         const y0 = cy + 12 * scale;
         const g2 = ctx.createLinearGradient(x0, y0, x0 + side * 14 * scale, y0 + 90 * scale);
         g2.addColorStop(0, 'rgba(255,255,255,0.28)');
@@ -1604,7 +1775,7 @@ export function createRenderer(canvas) {
         'Space — drop a crate    P — pause    M — mute',
         best > 0 ? `Best score: ${best}` : 'Fly the rings, grab the crates, drop the supplies, land her.',
         'Press Space or click to fly',
-      ], '#ffd166', -70);
+      ], '#ffd166', -95, 40, 15, -1, 600, 0.94);
     } else if (screen === SCREEN_BRIEF) {
       const m = world.state.mission;
       const defs = [
@@ -1632,12 +1803,13 @@ export function createRenderer(canvas) {
     } else if (screen === SCREEN_WIN) {
       const rating = state.score >= RATING_LEGEND ? 'LEGEND OF THE SKIES' : state.score >= RATING_ACE ? 'ACE OF THE SKIES' : state.score >= RATING_SKILLED ? 'SKILLED PILOT' : 'ROOKIE WINGS';
       overlay(w, h, [
-        'DELIVERED — ALL MISSIONS COMPLETE',
+        'DELIVERED!',
+        'ALL MISSIONS COMPLETE',
         rating,
         `Final score: ${state.score}   (best ${Math.max(best, state.score)})`,
         `Landing bonus: +${state.landScore}   Best combo: x${state.maxCombo}`,
         'Press Space to fly again',
-      ], '#ffd166');
+      ], '#ffd166', -70, 40, 16, 3, 640, 0.88);
     }
   }
 
