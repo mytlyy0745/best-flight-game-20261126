@@ -1,22 +1,22 @@
 import {
-  STEP, TRACK_LENGTH, SPEED_MIN, SPEED_MAX, CLIMB_RATE, TURN_RATE,
+  STEP, TRACK_LENGTH, SPEED_MIN, SPEED_MAX, TURN_RATE,
   MAX_ALT, LATERAL_LIMIT, FUEL_START, FUEL_DRAIN_BASE, FUEL_DRAIN_THROTTLE,
   RING_COUNT, RING_RADIUS, ZONE_COUNT, ZONE_RADIUS, CRATES, RUNWAY,
-  MISSION_Z, SCORE_RING, SCORE_STREAK, SCORE_ZONE, SCORE_LAND_BASE,
-  SCORE_LAND_CENTER, SCORE_LAND_SMOOTH, LAND_MAX_VS, LAND_MAX_SPEED,
-  CROSSWIND, SCORE_RING_PRECISION, RING_PRECISION_DIST, SCORE_ZONE_STREAK,
-  SCORE_PERFECT_RINGS, SCORE_PERFECT_ZONES, SCORE_TIME_RINGS,
-  SCORE_TIME_ZONES, SCORE_TIME_LAND, TIME_PAR_RINGS, TIME_PAR_ZONES,
-  TIME_PAR_LAND, SCORE_GREASED, LAND_GREASED_VS,
-  GOLDEN_RING_COUNT, GOLDEN_RING_RADIUS, SCORE_GOLDEN_RING,
-  SCORE_BALLOON_BUZZ, BALLOON_BUZZ_DIST,
-  GUST_AMP1, GUST_AMP2, GUST_FREQ1, GUST_FREQ2,
-  SCORE_ON_FIRE, ON_FIRE_RING_STREAK, ON_FIRE_ZONE_STREAK,
-  SCORE_NEAR_MISS, NEAR_MISS_DIST,
-  SKY_CRATE_COUNT, SKY_CRATE_RADIUS, SCORE_SKY_CRATE,
-  DROP_WIND_MAX, SCORE_BULLSEYE, BULLSEYE_DIST,
+  MISSION_Z, LAND_MAX_VS, LAND_MAX_SPEED,
+  SCORE_BULLSEYE, BULLSEYE_DIST, SCORE_ON_FIRE, ON_FIRE_RING_STREAK,
+  ON_FIRE_ZONE_STREAK, SCORE_NEAR_MISS, NEAR_MISS_DIST,
+  SCORE_SKY_CRATE, SKY_CRATE_RADIUS, SKY_CRATE_COUNT, SCORE_BALLOON_BUZZ, BALLOON_BUZZ_DIST,
+  DROP_WIND_MAX, RING_PRECISION_DIST, SCORE_PERFECT_RINGS,
+  SCORE_PERFECT_ZONES, SCORE_TIME_RINGS, SCORE_TIME_ZONES, SCORE_TIME_LAND,
+  TIME_PAR_RINGS, TIME_PAR_ZONES, TIME_PAR_LAND, SCORE_GREASED,
+  LAND_GREASED_VS, GOLDEN_RING_COUNT, GOLDEN_RING_RADIUS,
+  RETRY_FUEL_MIN,
 } from './config.js';
 import { createRandom, makeNoise } from './random.js';
+import {
+  climbVs, layeredGust, crosswindAt, crateFallStep,
+  ringPoints, zonePoints, landingPoints, courseStepBudget, validateCourse,
+} from './algorithms.js';
 
 export const EVENT_RING = 1;
 export const EVENT_ZONE = 2;
@@ -38,15 +38,16 @@ function clamp(v, lo, hi) {
 function buildCourse(rand) {
   const rings = [];
   let x = 0;
-  let alt = 150;
+  let alt = 160;
   const goldenIdx = new Set();
   while (goldenIdx.size < GOLDEN_RING_COUNT) {
     goldenIdx.add(2 + Math.floor(rand() * (RING_COUNT - 3)));
   }
   for (let i = 0; i < RING_COUNT; i += 1) {
     const z = 350 + i * 240;
-    x = clamp(x + (rand() * 2 - 1) * 70, -170, 170);
-    alt = clamp(alt + (rand() * 2 - 1) * 35, 80, 260);
+    const budget = courseStepBudget(i);
+    x = clamp(x + (rand() * 2 - 1) * budget.dx, -170, 170);
+    alt = clamp(alt + (rand() * 2 - 1) * budget.dAlt, 80, 260);
     const golden = goldenIdx.has(i);
     rings.push({ z, x, alt, r: golden ? GOLDEN_RING_RADIUS : RING_RADIUS, hit: false, passed: false, golden, hitT: -1 });
   }
@@ -134,7 +135,7 @@ export function createWorld(rand) {
   }
   const gust = { p1: rand() * 6.283, p2: rand() * 6.283 };
   function gustAt(time) {
-    return GUST_AMP1 * Math.sin(time * GUST_FREQ1 + gust.p1) + GUST_AMP2 * Math.sin(time * GUST_FREQ2 + gust.p2);
+    return layeredGust(time, gust.p1, gust.p2);
   }
   const dropWind = (rand() * 2 - 1) * DROP_WIND_MAX;
 
@@ -215,9 +216,11 @@ export function createWorld(rand) {
     const nearMissed = state.nearMissed;
     const cratesCollected = state.cratesCollected;
     const bullseyes = state.bullseyes;
+    const fuelLeft = state.fuel;
     reset();
     state.banked = banked;
     state.score = banked;
+    state.fuel = Math.max(RETRY_FUEL_MIN, fuelLeft);
     state.ringsHit = ringsHit;
     state.zonesHit = zonesHit;
     state.balloonBuzzed = balloonBuzzed;
@@ -312,12 +315,12 @@ export function createWorld(rand) {
     let lateral = Math.sin(headRad) * state.speed;
     state.gust = state.mission === 1 ? gustAt(state.time) : 0;
     if (state.mission === 1) lateral += state.gust;
-    if (state.z > 5000 && state.mission === 3) lateral += CROSSWIND;
+    if (state.mission === 3) lateral += crosswindAt(state.z);
     state.x = clamp(state.x + lateral * dt, -LATERAL_LIMIT, LATERAL_LIMIT);
     state.z += Math.cos(headRad) * state.speed * dt;
 
-    const sink = state.speed < 55 ? (55 - state.speed) * 0.12 : 0;
-    state.vs = state.pitch * state.speed * CLIMB_RATE - sink;
+    const ground = groundAt(state.z);
+    state.vs = climbVs(state.speed, state.pitch, state.alt - ground);
     state.alt = clamp(state.alt + state.vs * dt, 0, MAX_ALT);
 
     state.fuel -= (FUEL_DRAIN_BASE + state.throttle * FUEL_DRAIN_THROTTLE) * dt;
@@ -332,17 +335,15 @@ export function createWorld(rand) {
     }
 
     for (const c of state.cratesFalling) {
-      c.vz -= 9.8 * dt;
-      c.z += state.speed * dt;
-      c.x += state.dropWind * dt;
-      c.alt += c.vz * dt;
+      crateFallStep(c, dt, state.dropWind);
       if (c.alt <= groundAt(c.z)) {
         c.done = true;
         const zone = course.zones.find((zn) => !zn.hit && Math.abs(zn.z - c.z) < zn.r && Math.abs(zn.x - c.x) < zn.r);
         if (zone) {
           zone.hit = true;
           state.zonesHit += 1;
-          const pts = SCORE_ZONE + SCORE_ZONE_STREAK * state.zoneStreak;
+          const zp = zonePoints(state.zoneStreak);
+          const pts = zp.total;
           state.zoneStreak += 1;
           state.maxCombo = Math.max(state.maxCombo, state.zoneStreak);
           let bullExtra = '';
@@ -381,11 +382,10 @@ export function createWorld(rand) {
     if (ctl.drop && state.dropCooldown <= 0 && state.crates > 0 && state.mission === 2) {
       state.crates -= 1;
       state.dropCooldown = 1.5;
-      state.cratesFalling.push({ z: state.z, x: state.x, alt: state.alt, vz: 0 });
+      state.cratesFalling.push({ z: state.z, x: state.x, alt: state.alt, vz: 0, vf: state.speed });
       events |= EVENT_DROP;
     }
 
-    const ground = groundAt(state.z);
     const onRunway = state.z >= RUNWAY.z0 && state.z <= RUNWAY.z1;
 
     if (state.mission === 1) {
@@ -414,14 +414,14 @@ export function createWorld(rand) {
             state.ringsHit += 1;
             state.streak += 1;
             state.maxCombo = Math.max(state.maxCombo, state.streak);
-            let pts = (r.golden ? SCORE_GOLDEN_RING : SCORE_RING) + SCORE_STREAK * (state.streak - 1);
             const precise = Math.hypot(dx, dy) < RING_PRECISION_DIST;
+            const rp = ringPoints(r.golden, state.streak, precise);
+            const pts = rp.total;
             if (precise) {
-              pts += SCORE_RING_PRECISION;
-              state.scoreParts.bonus += SCORE_RING_PRECISION;
+              state.scoreParts.bonus += rp.precisionBonus;
             }
             state.score += pts;
-            state.scoreParts.rings += pts - (precise ? SCORE_RING_PRECISION : 0);
+            state.scoreParts.rings += pts - (precise ? rp.precisionBonus : 0);
             events |= EVENT_RING;
             let fireExtra = '';
             if (!state.onFireM1 && state.streak >= ON_FIRE_RING_STREAK) {
@@ -480,10 +480,8 @@ export function createWorld(rand) {
         if (centred && vs <= LAND_MAX_VS && state.speed <= LAND_MAX_SPEED) {
           state.landed = true;
           state.alt = 0;
-          const centerBonus = Math.round(SCORE_LAND_CENTER * (1 - Math.abs(state.x) / RUNWAY.halfWidth));
-          const smoothBonus = Math.round(SCORE_LAND_SMOOTH * (1 - vs / LAND_MAX_VS));
-          const fuelBonus = Math.round(state.fuel * 2);
-          state.landScore = SCORE_LAND_BASE + centerBonus + smoothBonus + fuelBonus;
+          const lp = landingPoints(state.x, vs, state.fuel);
+          state.landScore = lp.total;
           state.score += state.landScore;
           state.scoreParts.landing += state.landScore;
           let extra = '';
@@ -529,6 +527,8 @@ export function createWorld(rand) {
     return events;
   }
 
+  course.checks = validateCourse(course, groundAt);
+
   return {
     state,
     course,
@@ -542,6 +542,7 @@ export function createWorld(rand) {
     balloonAt,
     birdsAt,
     gustAt,
+    crosswindAt,
     dropWind,
     riverX,
     groundAt,
