@@ -1,6 +1,9 @@
 // Sky Courier — keyboard and mouse input.
 // Arrow keys / WASD fly the plane, Shift / Ctrl work the throttle, Space
 // drops a crate (mission 2) or confirms, P pauses, M mutes, Enter starts.
+// B (or X) is the speed brake: hold it to cut the throttle fast toward
+// 15% — for slowing to the drop release or onto short final. Release it
+// and the throttle stays where the brake left it; Shift spools back up.
 // Holding the mouse button steers too: the plane banks toward the pointer.
 export const ACTION_CONFIRM = 1;
 export const ACTION_PAUSE = 2;
@@ -57,6 +60,11 @@ export function createInput(canvas) {
     if (keys.has('ArrowRight') || keys.has('d')) roll += 1;
     if (keys.has('Shift')) throttle = clamp(throttle + dt * 0.5, 0, 1);
     if (keys.has('Control') || keys.has('c')) throttle = clamp(throttle - dt * 0.5, 0, 1);
+    // Speed brake: cuts the throttle fast toward 15%, five times quicker
+    // than Ctrl alone — for the drop release and short final. It only
+    // moves the throttle the world already reads, so the autopilot and
+    // the staged shots (which never read input) are untouched by it.
+    if (keys.has('b') || keys.has('x')) throttle = Math.max(0.15, throttle - dt * 2.5);
 
     if (mouseDown) {
       const rect = canvas.getBoundingClientRect();

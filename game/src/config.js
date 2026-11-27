@@ -77,7 +77,8 @@ export const BULLSEYE_DIST = 10; // metres from zone centre, both axes
 
 // Scoring.
 export const SCORE_RING = 100;
-export const SCORE_STREAK = 25;
+export const SCORE_STREAK = 30; // was 25: a clean run of rings is the
+// skill the game rewards most, so the streak now pays more per ring.
 export const SCORE_ZONE = 250;
 export const SCORE_LAND_BASE = 400;
 export const SCORE_LAND_CENTER = 300;
@@ -105,6 +106,21 @@ export const RATING_LEGEND = 6500;
 export const RATING_ACE = 5000;
 export const RATING_SKILLED = 3800;
 
+// Resub gameplay depth — bonuses the main.js scorer pays on top of the
+// world rules. Every one of them is earned by flying well, never by
+// surviving: a speed ring needs 100+ m/s through the ring, a surgeon
+// streak needs consecutive dead-centre threads, sharpshooter needs
+// consecutive bullseyes, clean sweep needs every sky crate, untouched
+// needs a whole flight with no crash and no damage. The autopilot
+// flies at 88 m/s and takes only near-line crates, so it earns almost
+// none of these — they are the human skill ceiling, not free points.
+export const SCORE_SPEED_RING = 50; // ring threaded at 100+ m/s
+export const SPEED_RING_MIN = 100; // m/s at the ring crossing
+export const SCORE_SURGEON = 25; // per ring in a dead-centre streak (2nd+)
+export const SCORE_SHARPSHOOTER = 50; // per bullseye in a streak (2nd+)
+export const SCORE_CLEAN_SWEEP = 150; // every sky crate in mission 1
+export const SCORE_UNTOUCHED = 200; // landed, no retry, no damage
+
 // Landing envelope (mission 3, on the runway strip only).
 export const LAND_MAX_VS = 7; // m/s descent at touchdown
 export const LAND_MAX_SPEED = 100; // m/s at touchdown
@@ -114,19 +130,19 @@ export const MISSIONS = [
   {
     id: 1,
     name: 'RING RUN',
-    brief: 'Fly through all 12 rings. Two are GOLDEN — smaller, worth 250. A balloon drifts over the valley: buzz it for +150. Supply crates float off the ring line: grab one for +75, but don\'t miss the next ring. Watch the wind — gusts push you sideways, and a wingman flies formation with you for a stretch. Throttle with Shift / Ctrl, steer with the arrow keys or WASD. Rings pay 100, streaks pay extra, dead-centre hits pay more.',
+    brief: 'Fly through all 12 rings. Two are GOLDEN — smaller, worth 250. A balloon drifts over the valley: buzz it for +150. Supply crates float off the ring line: grab one for +75, all three for a CLEAN SWEEP +150 — but don\'t miss the next ring. Watch the wind — gusts push you sideways, and a wingman flies formation with you for a stretch. Throttle with Shift / Ctrl, steer with the arrow keys or WASD. Rings pay 100, streaks pay extra, dead-centre hits pay more — thread one dead centre twice in a row for a SURGEON bonus, or flat out at 100+ m/s for FULL SEND +50.',
     goal: 'Fly through 12 rings',
   },
   {
     id: 2,
     name: 'SUPPLY DROP',
-    brief: 'Five villages need supplies. Press Space over a marked circle to drop a crate — it keeps your forward speed, so release a little early. A crosswind drifts the crates sideways: watch the DROP WIND meter and release upwind. Land one within 10 m of the centre for a BULLSEYE +100. 6 crates, 5 zones.',
+    brief: 'Five villages need supplies. Press Space over a marked circle to drop a crate — it keeps your forward speed, so release a little early. A crosswind drifts the crates sideways: watch the DROP WIND meter and release upwind. Land one within 10 m of the centre for a BULLSEYE +100 — two bullseyes in a row pays SHARPSHOOTER. Hold B for the speed brake to slow for the release. 6 crates, 5 zones.',
     goal: 'Drop crates on 5 zones',
   },
   {
     id: 3,
     name: 'STORM LANDING',
-    brief: 'Crosswind from the right. Bring her down on the runway: slow, level, gentle. Touch down under 100 m/s and under 7 m/s descent, inside the strip.',
+    brief: 'Crosswind from the right. Bring her down on the runway: slow, level, gentle. Touch down under 100 m/s and under 7 m/s descent, inside the strip. Hold B for the speed brake on final. A whole flight with no crash and no damage pays UNTOUCHED +200.',
     goal: 'Land on the runway',
   },
 ];
