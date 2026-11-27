@@ -7,7 +7,6 @@ import { createEffects } from './effects.js';
 import { createRenderer, SCREEN_TITLE, SCREEN_BRIEF, SCREEN_PLAY, SCREEN_PAUSED, SCREEN_FAIL, SCREEN_MISSION_DONE, SCREEN_WIN } from './render.js';
 import { stageShot } from './shots.js';
 
-/** The longest frame the loop catches up on; a longer stall is dropped. */
 const MAX_FRAME = 0.25;
 
 export function createScorer() {

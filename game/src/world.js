@@ -31,35 +31,22 @@ export const EVENT_NEAR_MISS = 512;
 export const EVENT_CRATE = 1024;
 export const EVENT_BULLSEYE = 2048;
 
-// R3 runway surface data (world data; render.js only draws it). All
-// positions are fixed world coordinates — no randomness — so two runs
-// with the same seed render byte-identical frames.
 export const RUNWAY_MARKINGS = {
-  // Threshold ("piano keys") block just past the runway entrance:
-  // 6 narrow keys over an 80 m strip instead of 8 wide blocks.
   threshold: { z0: RUNWAY.z0 + 4, z1: RUNWAY.z0 + 84, bars: 6, fill: 0.42 },
-  // Touchdown (aiming-point) bars: narrow long strips flanking the
-  // centreline. halfWindow is how far along the strip each bar reaches
-  // (metres either side of its centre), so it reads as one long strip.
   aiming: [
     { z: RUNWAY.z0 + 150, w: 4, off: 8, halfWindow: 50 },
     { z: RUNWAY.z0 + 300, w: 4, off: 9, halfWindow: 50 },
     { z: RUNWAY.z0 + 450, w: 4, off: 8, halfWindow: 50 },
   ],
-  // Centreline: 34 m dash / 26 m gap per 60 m cycle, solid within
-  // 160 m of the camera so it sweeps unbroken to the bottom edge.
   centreDash: { cycle: 60, on: 34, solidWithin: 160 },
 };
 export const RUNWAY_LIGHTS = {
-  // Entrance accents just past the aiming point, outside each edge —
-  // the warm lights that mark the strip the camera is sitting over.
   near: [
     { z: RUNWAY.z0 + 320, x: -(RUNWAY.halfWidth + 4) },
     { z: RUNWAY.z0 + 360, x: -(RUNWAY.halfWidth + 4) },
     { z: RUNWAY.z0 + 320, x: RUNWAY.halfWidth + 4 },
     { z: RUNWAY.z0 + 360, x: RUNWAY.halfWidth + 4 },
   ],
-  // Closing row at the far end, flanking the vanishing point.
   far: [
     { z: RUNWAY.z1 - 8, x: -(RUNWAY.halfWidth + 2) },
     { z: RUNWAY.z1 - 8, x: -(RUNWAY.halfWidth + 6) },
