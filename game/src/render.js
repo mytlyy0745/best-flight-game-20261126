@@ -947,6 +947,10 @@ export function createRenderer(canvas, effects) {
       ctx.fillRect(-40, lastBandBottom, w + 80, h - lastBandBottom);
     }
 
+    // Tags that must never be covered by a later-drawn plane: the balloon's
+    // BUZZ ME tag is collected here and painted after the whole drawable
+    // loop (and the clouds), so the wingman's wing can no longer hide it.
+    const pendingTags = [];
     const drawables = [];
     for (const zn of world.course.zones) {
       const d = zn.z - camZ;
@@ -1021,12 +1025,37 @@ export function createRenderer(canvas, effects) {
           ctx.closePath();
           ctx.fill();
         }
+        // A raised disc, not a flat paint patch: a darker wall ellipse peeks
+        // out below the top face (the disc's thickness), then concentric
+        // rings and a bright centre mark the bullseye, with a pale arc
+        // catching the light on the near rim.
+        const wall = zn.hit ? '#1d7a44' : '#a86f14';
+        const rim = zn.hit ? '#50ff8c' : '#ffbe3c';
+        const wallDrop = Math.max(2, ry * 0.42);
+        ctx.fillStyle = wall;
+        ctx.beginPath();
+        ctx.ellipse(sx, gy + wallDrop, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fill();
         ctx.fillStyle = zn.hit ? 'rgba(80,255,140,0.5)' : `rgba(255,190,60,${0.45 + 0.2 * Math.sin(state.time * 4)})`;
         ctx.beginPath();
         ctx.ellipse(sx, gy, rx, ry, 0, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = zn.hit ? '#50ff8c' : '#ffbe3c';
+        ctx.strokeStyle = rim;
         ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.strokeStyle = zn.hit ? 'rgba(6,80,40,0.65)' : 'rgba(150,95,10,0.6)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(sx, gy, rx * 0.62, ry * 0.62, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = zn.hit ? 'rgba(200,255,220,0.9)' : 'rgba(255,226,130,0.9)';
+        ctx.beginPath();
+        ctx.ellipse(sx, gy, Math.max(2, rx * 0.16), Math.max(1, ry * 0.16), 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = zn.hit ? 'rgba(220,255,235,0.55)' : 'rgba(255,242,190,0.55)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(sx, gy, rx * 0.86, ry * 0.86, 0, Math.PI, Math.PI * 2);
         ctx.stroke();
         if (zn.hit) {
           worldTag('SUPPLIED ✓', sx, gy - ry - 8, Math.max(13, Math.min(22, rx * 0.5)), '#50ff8c');
@@ -1284,7 +1313,7 @@ export function createRenderer(canvas, effects) {
         ctx.fillStyle = '#6b4a1a';
         ctx.fillRect(sx - s * 0.3, sy + s * 1.5, s * 0.6, s * 0.45);
         if (!state.balloonBuzzed) {
-          worldTag('BUZZ ME +150', sx, sy - s * 1.45, Math.max(13, Math.min(18, s * 0.5)), '#ffd166');
+          pendingTags.push({ text: 'BUZZ ME +150', x: sx, y: sy - s * 1.45, px: Math.max(13, Math.min(18, s * 0.5)), color: '#ffd166' });
         }
       } else if (item.kind === 'bird') {
         const b = item.o;
@@ -1420,18 +1449,56 @@ export function createRenderer(canvas, effects) {
         const pd = Math.max(d, 60);
         const sx = w / 2 + (camDepth * (c.x - camX)) / pd;
         const sy = horizonY + (camDepth * (camAlt - c.alt)) / pd;
-        const s = Math.max(3, (camDepth * 2.2) / pd);
+        // Big enough to read at a glance (~40 px box): the crate is the
+        // whole point of the drop frame, so it gets a parachute canopy
+        // above it instead of falling bare.
+        const s = Math.min(26, Math.max(3, (camDepth * 4.0) / pd));
+        const sway = Math.sin(state.time * 1.4 + c.z) * s * 0.12;
+        const cx = sx + sway;
+        const cy = sy - s * 3.1;
+        const cr = s * 2.3;
+        ctx.fillStyle = '#e8e4da';
+        ctx.beginPath();
+        ctx.arc(cx, cy, cr, Math.PI, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#d84a35';
+        ctx.beginPath();
+        ctx.arc(cx, cy, cr, Math.PI * 1.22, Math.PI * 1.78);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(90,58,34,0.85)';
+        ctx.lineWidth = Math.max(1, s * 0.07);
+        ctx.beginPath();
+        ctx.arc(cx, cy, cr, Math.PI, 0);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx - cr * 0.95, cy);
+        ctx.lineTo(sx - s * 0.9, sy - s);
+        ctx.moveTo(cx + cr * 0.95, cy);
+        ctx.lineTo(sx + s * 0.9, sy - s);
+        ctx.moveTo(cx - cr * 0.35, cy);
+        ctx.lineTo(sx - s * 0.3, sy - s);
+        ctx.moveTo(cx + cr * 0.35, cy);
+        ctx.lineTo(sx + s * 0.3, sy - s);
+        ctx.stroke();
         ctx.fillStyle = '#c98f3d';
         ctx.fillRect(sx - s, sy - s, s * 2, s * 2);
         ctx.strokeStyle = '#6b4a1a';
+        ctx.lineWidth = Math.max(1, s * 0.08);
         ctx.strokeRect(sx - s, sy - s, s * 2, s * 2);
         ctx.fillStyle = 'rgba(255,255,255,0.85)';
         ctx.fillRect(sx - s * 0.2, sy - s, s * 0.4, s * 2);
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.fillRect(sx - s, sy + s * 0.7, s * 2, Math.max(1, s * 0.3));
       }
     }
 
     drawClouds(w, horizonY, camZ, camX, world.clouds, camDepth);
     if (effects) effects.drawCloudVolume(ctx, { w, h, horizonY, camDepth, camX, camZ }, state, world);
+    // Deferred world tags go last, above every drawable and cloud, so a
+    // wing or fuselage drawn after the balloon can never cover them.
+    for (const tag of pendingTags) worldTag(tag.text, tag.x, tag.y, tag.px, tag.color);
     ctx.restore();
 
     if (screen === SCREEN_WIN) {
