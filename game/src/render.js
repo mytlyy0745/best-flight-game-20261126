@@ -887,7 +887,15 @@ export function createRenderer(canvas, effects) {
             const tx = cx + (camDepth * off) / d;
             const tw = Math.min(14, Math.max(1.5, (camDepth * 2.2) / d));
             ctx.fillStyle = 'rgba(52,52,60,0.28)';
-            ctx.fillRect(tx - tw / 2, topY, tw, bandH);
+            if (d < 12 && camAlt > 0.5) {
+              const fx = w / 2 - (camDepth * camX) / 25 + (camDepth * off) / 25;
+              ctx.beginPath();
+              ctx.moveTo(fx - tw / 2, topY);
+              ctx.lineTo(fx + tw / 2, topY);
+              ctx.lineTo(tx + tw / 2, topY + bandH);
+              ctx.lineTo(tx - tw / 2, topY + bandH);
+              ctx.fill();
+            } else ctx.fillRect(tx - tw / 2, topY, tw, bandH);
           }
           const zm = z - SEG_LEN / 2;
           const dash = RUNWAY_MARKINGS.centreDash;
@@ -899,8 +907,8 @@ export function createRenderer(canvas, effects) {
             }
             if (d < 12 && centrePts.length) {
               const q = centrePts[centrePts.length - 1];
-              centrePts.push({ x: (q.x + cx) / 2, y: (q.y + y) / 2, half });
-              centrePts.push({ x: (q.x * 3 + cx * 5) / 8, y: (q.y * 3 + y * 5) / 8, half, move: true });
+              centrePts.push({ x: (q.x * 5 + cx * 3) / 8, y: (q.y * 5 + y * 3) / 8, half });
+              centrePts.push({ x: (q.x + cx) / 2, y: (q.y + y) / 2, half, move: true });
             }
             centrePts.push({ x: cx, y, half });
           } else {
