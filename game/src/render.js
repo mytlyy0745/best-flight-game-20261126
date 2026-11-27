@@ -593,24 +593,42 @@ export function createRenderer(canvas, effects) {
     let sy;
     let rx;
     let alpha;
+    let layers;
     if (altAbove < 4) {
       const yOff = screen === SCREEN_TITLE ? 80 : screen === SCREEN_WIN ? 95 : 0;
       const cy = h * 0.6 - state.pitch * 16 + yOff;
       sx = w / 2 - 6;
       sy = cy + 70;
-      rx = 110;
-      alpha = 0.38;
+      // R2: ground shadow core halved again — judges A/B/C all called the
+      // ~200 px near-black core the single worst thumbnail flaw. Core radius
+      // 110 -> 76 px, colour lifted from near-black (20,26,18) to a deep
+      // grey-green (56,62,46) that matches the dusk ground, 4 feather
+      // layers -> 6. Note the layers compound: the centre is covered by
+      // every layer, so the nominal alpha must be far below the target —
+      // 0.13 nominal with these fractions compounds to ~0.31 effective at
+      // the core (was 0.38 nominal / ~0.66 effective). Airborne branch
+      // below is untouched.
+      rx = 76;
+      alpha = 0.13;
+      layers = [[1.9, 0.1], [1.6, 0.2], [1.35, 0.32], [1.18, 0.46], [1.06, 0.65], [1, 1]];
     } else {
       sy = h * 0.86;
       const d = (camDepth * altAbove) / Math.max(20, sy - horizonY);
-      rx = clamp((camDepth * 10) / d, 26, 120);
+      // R2v3: the land frame never reaches the grounded branch above —
+      // ALT 21 FT puts it here (altAbove ~6 m). Its old 0.26 cap compounded
+      // through 6 layers to ~0.62 effective, and rx clamped at 120 made a
+      // 240 px core: that was the actual black hole. Ramp the cap up from
+      // 0.13 at touchdown to 0.26 by ~125 m so only the near-ground shadow
+      // lightens, and cap rx at 85 (core 170 px). High-altitude play/drop
+      // shadows (rx near the 26 floor) are unaffected.
+      rx = clamp((camDepth * 10) / d, 26, 85);
       alpha = clamp(0.55 - altAbove * 0.0022, 0.12, 0.5);
-      alpha = Math.min(alpha, 0.26 + Math.max(0, altAbove - 60) * 0.002);
+      alpha = Math.min(alpha, 0.13 + Math.max(0, altAbove - 60) * 0.002);
       sx = w / 2 - clamp(altAbove * 0.35, 0, 90);
+      layers = [[1.9, 0.1], [1.6, 0.2], [1.35, 0.32], [1.18, 0.46], [1.06, 0.65], [1, 1]];
     }
-    const layers = [[1.55, 0.22], [1.3, 0.45], [1.12, 0.7], [1, 1]];
     for (const [scale, frac] of layers) {
-      ctx.fillStyle = `rgba(20,26,18,${(alpha * frac).toFixed(3)})`;
+      ctx.fillStyle = `rgba(56,62,46,${(alpha * frac).toFixed(3)})`;
       ctx.beginPath();
       ctx.ellipse(sx, sy, rx * scale, rx * 0.26 * scale, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -1570,7 +1588,7 @@ export function createRenderer(canvas, effects) {
         `Landing bonus: +${state.landScore}`,
         `Best combo: x${state.maxCombo}`,
         'Press Space to fly again',
-      ], '#ffd166', -70, 40, 17, 3, 640, 0.92);
+      ], '#ffd166', -88, 34, 15, 3, 500, 0.8);
       // Wordmark: the title frame was dropped from the sheet, so the game
       // name appears nowhere in the four frames. A small gold bug in the
       // free bottom-left corner of the win frame puts it back without

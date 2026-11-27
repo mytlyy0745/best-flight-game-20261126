@@ -1,5 +1,6 @@
 import { createRandom } from './random.js';
 import { VIEW_DIST, CROSSWIND } from './config.js';
+import { SCREEN_WIN } from './render.js'; // win screen: celebration, no storm
 
 const EVENT_RING = 1;
 const EVENT_ZONE = 2;
@@ -180,6 +181,10 @@ export function createEffects(seed) {
 
   function drawRain(ctx, view, state) {
     if (state.mission !== 3) return;
+    // R2: no rain on the win screen — fireworks in the rain reads as a
+    // weather contradiction (judge C). The storm landing itself (mission 3
+    // in play) keeps its rain; only the celebration frame is dry.
+    if (view.screen === SCREEN_WIN) return;
     const slant = -CROSSWIND * 1.6; // px of sideways drift per streak
     ctx.strokeStyle = 'rgba(190,214,235,0.3)';
     ctx.lineWidth = 1.2;
