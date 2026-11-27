@@ -11,7 +11,6 @@ export const TURN_RATE = 28; // degrees of heading per second at full bank
 export const MAX_ALT = 460; // metres above datum
 export const LATERAL_LIMIT = 320; // metres either side of the centreline
 
-// Flight model (algorithms.js): stall, ground effect, layered gusts, wind ramp.
 export const STALL_SPEED = 55; // m/s — below this the wing quits and she sinks
 export const STALL_SINK_K = 0.029; // sink = K * (STALL_SPEED - speed)^1.5, smooth to zero at stall speed
 export const GROUND_EFFECT_ALT = 8; // metres above ground where the cushion starts
@@ -100,7 +99,6 @@ export const SHARPSHOOTER_CAP = 4;
 export const SCORE_CLEAN_SWEEP = 150; // every sky crate in mission 1
 export const SCORE_UNTOUCHED = 200; // landed, no retry, no damage
 
-// Scoring ladder, cheapest to richest: every award in the game, in one table.
 export const SCORING_LADDER = [
   { award: 'Ring', pts: 100, rule: 'thread a ring' },
   { award: 'Ring streak', pts: 30, rule: '+30 per ring already in the streak' },

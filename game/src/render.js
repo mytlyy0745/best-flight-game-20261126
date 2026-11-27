@@ -337,9 +337,6 @@ export function createRenderer(canvas, effects) {
     ctx.fillStyle = '#bfefff';
   }
 
-  // In-world floating tag: coloured text on its own dark chip so it stays
-  // readable over bright sky, gold rings and pale ground. (x, y) is the
-  // text baseline centre, same anchor the old bare fillText used.
   function worldTag(text, x, y, px, color) {
     ctx.save();
     ctx.font = `bold ${px}px ui-monospace, monospace`;
@@ -354,9 +351,6 @@ export function createRenderer(canvas, effects) {
   }
 
   function drawHud(w, h, state, world, screen) {
-    // On the win screen the plane is parked on the runway: the frozen
-    // touchdown values (140 KT, -648 FPM) would read as still flying,
-    // so the parked instruments all read zero instead.
     const parked = screen === SCREEN_WIN;
     const ft = parked ? 0 : Math.round(state.alt * 3.281);
     const kts = parked ? 0 : Math.round(state.speed * 1.944);
@@ -600,39 +594,15 @@ export function createRenderer(canvas, effects) {
       const cy = h * 0.6 - state.pitch * 16 + yOff;
       sx = w / 2 - 6;
       sy = cy + 70;
-      // R2: ground shadow core halved again — judges A/B/C all called the
-      // ~200 px near-black core the single worst thumbnail flaw. Core radius
-      // 110 -> 76 px, colour lifted from near-black (20,26,18) to a deep
-      // grey-green (56,62,46) that matches the dusk ground, 4 feather
-      // layers -> 6. Note the layers compound: the centre is covered by
-      // every layer, so the nominal alpha must be far below the target —
-      // 0.13 nominal with these fractions compounds to ~0.31 effective at
-      // the core (was 0.38 nominal / ~0.66 effective). Airborne branch
-      // below is untouched.
       rx = 76;
       alpha = 0.13;
       layers = [[1.9, 0.1], [1.6, 0.2], [1.35, 0.32], [1.18, 0.46], [1.06, 0.65], [1, 1]];
     } else {
       sy = h * 0.86;
       const d = (camDepth * altAbove) / Math.max(20, sy - horizonY);
-      // R2v3: the land frame never reaches the grounded branch above —
-      // ALT 21 FT puts it here (altAbove ~6 m). Its old 0.26 cap compounded
-      // through 6 layers to ~0.62 effective, and rx clamped at 120 made a
-      // 240 px core: that was the actual black hole. Ramp the cap up from
-      // 0.13 at touchdown to 0.26 by ~125 m so only the near-ground shadow
-      // lightens, and cap rx at 85 (core 170 px). High-altitude play/drop
-      // shadows (rx near the 26 floor) are unaffected.
       rx = clamp((camDepth * 10) / d, 26, 85);
       alpha = clamp(0.55 - altAbove * 0.0022, 0.12, 0.5);
       alpha = Math.min(alpha, 0.13 + Math.max(0, altAbove - 60) * 0.002);
-      // R3 labels: at 550 FT (altAbove ~141 m) the airborne shadow was
-      // still ~0.5 effective — a dark oval on the field that read as a
-      // stain, not a shadow. Fade it out with height, the way a real
-      // shadow softens with distance, so the high play frame matches
-      // the soft grey-green land-frame ellipse. The fade is exactly 1
-      // at or below 60 m, so the land frame (altAbove ~6 m) and the
-      // drop frame (~53 m) are byte-identical; at 141 m it leaves
-      // ~0.08 nominal alpha and ~0.7x radius — a faint soft smudge.
       const highFade = altAbove <= 60 ? 1 : clamp(1 - (altAbove - 60) / 120, 0.28, 1);
       alpha *= highFade;
       rx *= 0.55 + 0.45 * highFade;
@@ -677,19 +647,10 @@ export function createRenderer(canvas, effects) {
     let prevY = horizonY;
     let lastBandFill = 'rgb(90,120,80)';
     let lastBandBottom = horizonY;
-    // R3: runway edge polylines — edge points are collected per band and
-    // stroked once after the loop, so the edges converge as smooth lines
-    // instead of stepped per-band segments. runwaySpan is the vertical
-    // span of the band-loop runway: ~0 when it is edge-on / hidden (the
-    // win screen has its own trapezoid), hundreds of px in the land frame.
     const edgeL = [];
     const edgeR = [];
     let runwaySpan = 0;
     let lastRunway = null;
-    // R3: centreline points for the smooth post-loop polyline — the
-    // true projected centreline is a straight diagonal, but per-band
-    // vertical segments staircased it (a 223 px jog at the nearest
-    // band). Points carry a move flag at each dash gap.
     const centrePts = [];
     let centreBreak = true;
     for (let i = segCount; i >= 0; i -= 1) {
@@ -732,10 +693,6 @@ export function createRenderer(canvas, effects) {
         }
         lastBandFill = baseFill;
         lastBandBottom = Math.max(lastBandBottom, topY + bandH);
-        // R3: skip the per-band light/dark overlay on the runway — it
-        // restarted every 25 m band and cut the strip into grey
-        // rectangles. The dusk depth ramp in the runway block below
-        // carries the shading instead, as one continuous gradient.
         if (!onRunway) {
           const bg = ctx.createLinearGradient(0, topY, 0, topY + bandH);
           bg.addColorStop(0, 'rgba(255,255,255,0.03)');
@@ -898,10 +855,6 @@ export function createRenderer(canvas, effects) {
         if (onRunway) {
           const cx = w / 2 - (camDepth * camX) / d;
           const half = (camDepth * RUNWAY.halfWidth) / d;
-          // R3: dusk depth ramp — warm sunlit asphalt near, cooler and
-          // darker far, so the strip reads as one surface receding
-          // instead of a flat slab. Daylight keeps the old flat base
-          // (the runway is never on screen in daylight frames).
           const depthT = dusk ? clamp(d / 620, 0, 1) : 0;
           const asphaltBase = dusk
             ? [Math.round(lerp(130, 72, depthT)), Math.round(lerp(110, 66, depthT)), Math.round(lerp(94, 72, depthT))]
@@ -910,13 +863,6 @@ export function createRenderer(canvas, effects) {
           const asphaltFill = mix3(asphaltBase, asphaltHaze, haze * 0.25);
           ctx.fillStyle = asphaltFill;
           ctx.fillRect(cx - half, topY, half * 2, bandH);
-          // R3: the strip below the nearest band is runway too — fill it
-          // with asphalt, not the green field colour the old baseFill
-          // carried (it painted a grass strip across the bottom edge).
-          // Only when this band genuinely descends toward the camera
-          // (y well below the horizon): parked on the runway (win
-          // screen, alt 0) the band loop is edge-on and the strip below
-          // is distant ground, not runway surface.
           if (y - horizonY > 40) lastBandFill = asphaltFill;
           if (bandH > 8) {
             const visH = Math.max(0, Math.min(bandH, h - topY));
@@ -942,10 +888,6 @@ export function createRenderer(canvas, effects) {
             ctx.fillStyle = 'rgba(52,52,60,0.28)';
             ctx.fillRect(tx - tw / 2, topY, tw, bandH);
           }
-          // R3: centreline — longer dash cycle (34 on / 26 off per
-          // 60 m), solid within 160 m. Points are collected for the
-          // smooth post-loop polyline instead of per-band vertical
-          // strokes (which staircased the near field).
           const zm = z - SEG_LEN / 2;
           const dash = RUNWAY_MARKINGS.centreDash;
           const dashOn = (((zm % dash.cycle) + dash.cycle) % dash.cycle) < dash.on || d < dash.solidWithin;
@@ -958,8 +900,6 @@ export function createRenderer(canvas, effects) {
           } else {
             centreBreak = true;
           }
-          // R3: collect edge points for the smooth post-loop polylines
-          // (the old per-band edge strokes stepped at every band).
           if (edgeL.length === 0) {
             edgeL.push({ x: cx - half, y: prevY, half });
             edgeR.push({ x: cx + half, y: prevY, half });
@@ -968,9 +908,6 @@ export function createRenderer(canvas, effects) {
           edgeR.push({ x: cx + half, y, half });
           runwaySpan = Math.max(runwaySpan, y - horizonY);
           lastRunway = { cx, half, y };
-          // R3: the cross-runway joint seam is gone — it cut the strip
-          // into grey rectangles.
-          // Threshold block: narrow piano keys over a longer strip.
           const th = RUNWAY_MARKINGS.threshold;
           if (z >= th.z0 && z <= th.z1) {
             ctx.fillStyle = 'rgba(255,255,255,0.8)';
@@ -980,11 +917,6 @@ export function createRenderer(canvas, effects) {
               ctx.fillRect(bx0, topY, bw, bandH);
             }
           }
-          // Touchdown (aiming-point) bars: narrow long strips at true
-          // perspective — no width/offset caps, so they taper with the
-          // runway instead of reading as square blocks. Bands nearer
-          // than 20 m are skipped so a strip never becomes a giant
-          // slab at the bottom edge.
           if (d > 20) {
             for (const bar of RUNWAY_MARKINGS.aiming) {
               if (Math.abs(zm - bar.z) <= bar.halfWindow) {
@@ -1019,11 +951,6 @@ export function createRenderer(canvas, effects) {
       ctx.fillRect(-40, lastBandBottom, w + 80, h - lastBandBottom);
     }
 
-    // R3: runway finish — smooth tapered edges, centreline run to the
-    // bottom edge, warm threshold lights. Only when the band-loop runway
-    // is genuinely visible (land frame, span of hundreds of px): the win
-    // screen has its own trapezoid and its band runway is edge-on
-    // (span ~0), so none of this leaks into it.
     if (runwaySpan > 40 && edgeL.length > 1 && edgeR.length > 1) {
       if (lastRunway && camAlt > 0.5 && h > horizonY) {
         const dB = (camDepth * camAlt) / (h - horizonY);
@@ -1032,14 +959,9 @@ export function createRenderer(canvas, effects) {
           const halfB = (camDepth * RUNWAY.halfWidth) / dB;
           edgeL.push({ x: cxB - halfB, y: h, half: halfB });
           edgeR.push({ x: cxB + halfB, y: h, half: halfB });
-          // Centreline run to the bottom edge: same straight diagonal,
-          // so the last dash sweeps unbroken off the frame.
           centrePts.push({ x: cxB, y: h, half: halfB });
         }
       }
-      // Smooth tapered centreline: one segment per band, width from
-      // that band's projected half-width — bold near, fine far. Dash
-      // gaps break the path (move points).
       ctx.strokeStyle = 'rgba(255,255,255,0.85)';
       ctx.lineCap = 'round';
       for (let s = 0; s < centrePts.length - 1; s += 1) {
@@ -1052,8 +974,6 @@ export function createRenderer(canvas, effects) {
         ctx.lineTo(b.x, b.y);
         ctx.stroke();
       }
-      // Tapered edge polylines: one segment per band, width from that
-      // band's projected half-width — wide near, hairline far.
       ctx.strokeStyle = 'rgba(255,255,255,0.6)';
       ctx.lineCap = 'round';
       for (const pts of [edgeL, edgeR]) {
@@ -1067,8 +987,6 @@ export function createRenderer(canvas, effects) {
           ctx.stroke();
         }
       }
-      // Warm threshold lights (world data): entrance accents near the
-      // camera plus a closing row at the far end.
       for (const light of [...RUNWAY_LIGHTS.near, ...RUNWAY_LIGHTS.far]) {
         const d = light.z - camZ;
         if (d < 12 || d > VIEW_DIST) continue;
@@ -1092,12 +1010,7 @@ export function createRenderer(canvas, effects) {
       }
     }
 
-    // Tags that must never be covered by a later-drawn plane: the balloon's
-    // BUZZ ME tag is collected here and painted after the whole drawable
-    // loop (and the clouds), so the wingman's wing can no longer hide it.
     const pendingTags = [];
-    // R3 labels: the nearest untaken sky crate is the only one that
-    // carries a GRAB tag (see the skycrate branch below).
     let nearestSkyCrateD = Infinity;
     for (const c of world.course.skyCrates) {
       const cd = c.z - camZ;
@@ -1162,15 +1075,6 @@ export function createRenderer(canvas, effects) {
         const gy = horizonY + (camDepth * (camAlt - world.groundAt(zn.z))) / d;
         const rx = (camDepth * zn.r) / d;
         const ry = Math.max(2, rx * 0.16);
-        // R3: the golden light beam is gone — it read as a second,
-        // floating light source and fought the disc for attention.
-        // A raised disc, not a flat paint patch: a darker wall ellipse peeks
-        // out below the top face (the disc's thickness), then concentric
-        // rings and a bright centre mark the bullseye, with a pale arc
-        // catching the light on the near rim.
-        // R3: faint contact shadow, drawn first so the wall and top
-        // face cover its centre — only a soft dark halo peeks out
-        // around the disc, grounding it on the terrain.
         ctx.fillStyle = 'rgba(0,0,0,0.18)';
         ctx.beginPath();
         ctx.ellipse(sx, gy + 2, rx * 1.08, Math.max(2, ry * 1.35), 0, 0, Math.PI * 2);
@@ -1544,13 +1448,6 @@ export function createRenderer(canvas, effects) {
         const sy = horizonY + (camDepth * (camAlt - c.alt)) / d + Math.sin(state.time * 1.2 + c.z) * 2;
         const s = Math.max(3, (camDepth * 2.6) / d);
         if (sx < -80 || sx > w + 80 || sy < -60 || sy > h + 40) continue;
-        // R3 labels: the near crate sat on the hero's tail — its box
-        // overlapped the fuselage column and its canopy all but touched
-        // the tail fin. Nudge the whole crate drawing (box, canopy and
-        // tag move together) just far enough right to clear the
-        // fuselage, only when a readable-size crate would otherwise
-        // intersect it. Pure screen-space offset: world position, grab
-        // radius and score are untouched.
         if (!c.taken && s > 10) {
           const planeCy = h * 0.6 - state.pitch * 16;
           const crateTop = sy - s * 3.1;
@@ -1586,12 +1483,6 @@ export function createRenderer(canvas, effects) {
           ctx.fillStyle = 'rgba(255,255,255,0.85)';
           ctx.fillRect(sx - s * 0.2, sy - s, s * 0.4, s * 2);
           if (s > 4 && d === nearestSkyCrateD) {
-            // R3 labels: deferred like BUZZ ME (R2) so the canopy,
-            // clouds and plane can never cover it; and only the
-            // nearest crate carries a tag — the farther crate's
-            // identical 13 px tag was the weakest floating text in
-            // the frame and sat half-hidden behind this canopy and
-            // the tail fin, so it is dropped, not moved.
             pendingTags.push({ text: 'GRAB +75', x: sx, y: sy - s * 3.4, px: Math.max(13, Math.min(18, s * 0.5)), color: '#ffd166' });
           }
         } else if (c.hitT >= 0) {
@@ -1616,9 +1507,6 @@ export function createRenderer(canvas, effects) {
         const pd = Math.max(d, 60);
         const sx = w / 2 + (camDepth * (c.x - camX)) / pd;
         const sy = horizonY + (camDepth * (camAlt - c.alt)) / pd;
-        // Big enough to read at a glance (~40 px box): the crate is the
-        // whole point of the drop frame, so it gets a parachute canopy
-        // above it instead of falling bare.
         const s = Math.min(26, Math.max(3, (camDepth * 4.0) / pd));
         const sway = Math.sin(state.time * 1.4 + c.z) * s * 0.12;
         const cx = sx + sway;
@@ -1663,8 +1551,6 @@ export function createRenderer(canvas, effects) {
 
     drawClouds(w, horizonY, camZ, camX, world.clouds, camDepth);
     if (effects) effects.drawCloudVolume(ctx, { w, h, horizonY, camDepth, camX, camZ }, state, world);
-    // Deferred world tags go last, above every drawable and cloud, so a
-    // wing or fuselage drawn after the balloon can never cover them.
     for (const tag of pendingTags) worldTag(tag.text, tag.x, tag.y, tag.px, tag.color);
     ctx.restore();
 
@@ -1734,16 +1620,9 @@ export function createRenderer(canvas, effects) {
     }
     if (effects) effects.draw(ctx, { w, h, horizonY, camDepth, camX, camAlt, camZ, pitch: state.pitch, screen, dusk }, state, world);
 
-    // R3: win celebration is drawn BEFORE the HUD, not after it, so
-    // every HUD panel and text line sits on top of the fireworks and
-    // stays crisp whatever phase a burst is in. Belt and braces with
-    // the HUD-safe burst band in effects.drawFireworks: even a burst
-    // at full stretch can no longer cross THR or any other readout.
     if (screen === SCREEN_WIN && state.greased) {
       const cols = ['#ffd166', '#ff5a4e', '#7dd7ff', '#7dffa8'];
       for (let i = 0; i < 4; i += 1) {
-        // Same HUD-safe band as drawFireworks (see effects.js): the
-        // old spots (e.g. red at 1048,159) also clipped the THR panel.
         const fx = w * (0.26 + hash(i * 7 + 3) * 0.48);
         const fy = h * (0.35 + hash(i * 11 + 5) * 0.42);
         const cycle = (animT * 0.4 + i * 0.37) % 1;
@@ -1813,11 +1692,6 @@ export function createRenderer(canvas, effects) {
         `Best combo: x${state.maxCombo}`,
         'Press Space to fly again',
       ], '#ffd166', -88, 34, 15, 3, 500, 0.84); // R3: 0.80 -> 0.84, less runway centreline showing through
-      // Wordmark: the title frame was dropped from the sheet, so the game
-      // name appears nowhere in the four frames. A small gold bug in the
-      // free bottom-left corner of the win frame puts it back without
-      // covering the plane, the fireworks, or any HUD text. Drawn last
-      // so it stays crisp on top of the overlay dim.
       const mark = 'SKY COURIER';
       ctx.save();
       ctx.font = 'bold 17px ui-monospace, Menlo, monospace';

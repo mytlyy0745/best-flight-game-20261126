@@ -8,7 +8,6 @@ import {
   RING_STEP_BASE, RING_STEP_INC, RING_ALT_STEP_BASE, RING_ALT_STEP_INC,
 } from './config.js';
 
-// Flight model: lift, stall, ground effect. Pure functions, no RNG, no clock.
 export function stallSink(speed) {
   const d = STALL_SPEED - speed;
   return d <= 0 ? 0 : STALL_SINK_K * Math.pow(d, 1.5);
@@ -24,23 +23,18 @@ export function climbVs(speed, pitch, heightAboveGround) {
   return pitch * speed * CLIMB_RATE - stallSink(speed) * (1 - ge) + 2 * ge;
 }
 
-// Layered gust field: two fast gusts over one slow swell. The swell phase is
-// derived from the first gust phase, so the seeded stream is untouched.
 export function layeredGust(time, p1, p2) {
   return GUST_AMP1 * Math.sin(time * GUST_FREQ1 + p1)
     + GUST_AMP2 * Math.sin(time * GUST_FREQ2 + p2)
     + GUST_SWELL_AMP * Math.sin(time * GUST_SWELL_FREQ + p1 + 1.3);
 }
 
-// Storm crosswind: smoothstep ramp, no step jump at the boundary.
 export function crosswindAt(z) {
   const t = (z - CROSSWIND_RAMP_Z0) / (CROSSWIND_RAMP_Z1 - CROSSWIND_RAMP_Z0);
   const s = t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
   return CROSSWIND * s;
 }
 
-// Falling crate: fixed forward speed captured at release, gravity with a
-// terminal-velocity cap. A crate never answers the throttle after release.
 export function crateFallStep(c, dt, dropWind) {
   c.vz = Math.max(c.vz - 9.8 * dt, -CRATE_TERMINAL_VS);
   c.z += c.vf * dt;
@@ -48,7 +42,6 @@ export function crateFallStep(c, dt, dropWind) {
   c.alt += c.vz * dt;
 }
 
-// Scoring table: every award as a pure function, one place, one arithmetic.
 export function ringPoints(golden, streak, precise) {
   const base = golden ? SCORE_GOLDEN_RING : SCORE_RING;
   const streakBonus = SCORE_STREAK * (streak - 1);
@@ -69,8 +62,6 @@ export function landingPoints(x, vs, fuel) {
   return { base: SCORE_LAND_BASE, center, smooth, fuelBonus, total: SCORE_LAND_BASE + center + smooth + fuelBonus };
 }
 
-// Course layout: difficulty ramp. Early legs are gentle, late legs use the
-// full step budget, so the run gets harder without ever getting unreachable.
 export function courseStepBudget(i) {
   return {
     dx: Math.min(70, RING_STEP_BASE + RING_STEP_INC * i),
@@ -78,7 +69,6 @@ export function courseStepBudget(i) {
   };
 }
 
-// Fairness self-check for a generated course. Returns issue strings, [] = clean.
 export function validateCourse(course, groundAt) {
   const issues = [];
   let px = 0;

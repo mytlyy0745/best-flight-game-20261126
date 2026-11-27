@@ -181,9 +181,6 @@ export function createEffects(seed) {
 
   function drawRain(ctx, view, state) {
     if (state.mission !== 3) return;
-    // R2: no rain on the win screen — fireworks in the rain reads as a
-    // weather contradiction (judge C). The storm landing itself (mission 3
-    // in play) keeps its rain; only the celebration frame is dry.
     if (view.screen === SCREEN_WIN) return;
     const slant = -CROSSWIND * 1.6; // px of sideways drift per streak
     ctx.strokeStyle = 'rgba(190,214,235,0.3)';
@@ -335,16 +332,6 @@ export function createEffects(seed) {
 
     drawFireworks(ctx, w, h, time) {
       const cols = ['#ffd166', '#ff5a4e', '#7dd7ff', '#7dffa8', '#ff9de2', '#fff3b0', '#ff8c42'];
-      // R3: burst centres stay in a HUD-safe band. The old spread
-      // (x 0.08–0.92, y 0.07–0.33) put the red burst at (1091,154) on
-      // 1280x720, its rays reaching up into the top-right panel and
-      // across the THR row, and a pale burst at (1160,183) did the
-      // same from below. A burst's widest extent is its glow, ±95 px,
-      // so centres keep ~100 px clear of every HUD rect: the corner
-      // panels (x 14–228 / 1056–1270, y 14–142), the top-centre panel
-      // (y 8–98), and the bottom compass / wordmark (y 670+). The win
-      // panel is drawn after the fireworks, so bursts behind it are
-      // dimmed by the panel instead of ever covering its text.
       for (let i = 0; i < 7; i += 1) {
         const fx = w * (0.26 + hash(i * 7 + 3) * 0.48);
         const fy = h * (0.35 + hash(i * 11 + 5) * 0.42);
