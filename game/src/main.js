@@ -1,16 +1,3 @@
-// Sky Courier — boot and the one loop: input is read every frame, the
-// world advances in fixed 1/60 s steps, and the renderer paints what is
-// there. Screens: title, mission brief, play, paused, mission failed,
-// mission complete, win.
-//
-// ?seed=N fixes the course. ?shot=start|play|drop|land|win (with &seed=N)
-// stages that scene instead of running the loop, paints it twice and sets
-// window.__shotReady for a screenshot.
-//
-// The boot code lives in boot() and only runs in a browser
-// (typeof window !== 'undefined'). The scorer below it is a pure,
-// DOM-free export, so Node harnesses can import this module and drive
-// the real live-game bonuses headlessly — one source of truth, no copy.
 import { BEST_KEY, STEP, MISSIONS, RING_PRECISION_DIST, SKY_CRATE_COUNT, SCORE_SPEED_RING, SPEED_RING_MIN, SCORE_SURGEON, SCORE_SHARPSHOOTER, SCORE_CLEAN_SWEEP, SCORE_UNTOUCHED } from './config.js';
 import { createRandom } from './random.js';
 import { createWorld, EVENT_RING, EVENT_ZONE, EVENT_LANDED, EVENT_MISSION_DONE, EVENT_DROP, EVENT_BALLOON, EVENT_ON_FIRE, EVENT_NEAR_MISS, EVENT_CRATE, EVENT_BULLSEYE } from './world.js';
@@ -23,25 +10,6 @@ import { stageShot } from './shots.js';
 /** The longest frame the loop catches up on; a longer stall is dropped. */
 const MAX_FRAME = 0.25;
 
-// ---------------------------------------------------------------------------
-// Live-game scorer: bonuses the world rules do not pay, for flying well.
-// The world already pays rings, streaks, precision (+25), crates,
-// bullseyes, ON FIRE, par times and perfect missions. These sit on top:
-//
-// - FULL SEND: thread a ring at 100+ m/s (+50). The autopilot flies at
-//   88, so it never earns this — it is the human speed line.
-// - SURGEON: dead-centre rings in a row. The 2nd consecutive precise
-//   ring pays 25 x streak, the 3rd 75, and so on — precision that holds.
-// - SHARPSHOOTER: bullseyes in a row, 50 x streak from the 2nd one.
-// - CLEAN SWEEP: every sky crate in mission 1 (+150), paid when the
-//   mission ends.
-// - UNTOUCHED: land with no retry and no damage all flight (+200).
-//
-// All of them need a hit to happen first, so no input, dives, climbs
-// and button-mashing earn nothing from them — the fairness probes guard
-// exactly that. apply() returns the bonus labels paid this step (for the
-// fanfare sound); totalBonus is the running sum, also exposed for tests.
-// ---------------------------------------------------------------------------
 export function createScorer() {
   let preciseStreak = 0;
   let bullseyeStreak = 0;
@@ -60,10 +28,6 @@ export function createScorer() {
     return n;
   }
 
-  // A bonus lands in the score and on the flash-message pill. When the
-  // world set a fresh message this very step (messageT still ~2.4), the
-  // bonus appends to it — "RING 6/12 +225 — DEAD CENTRE — FULL SEND +50"
-  // — instead of wiping the ring's own line. Otherwise it posts its own.
   function award(world, pts, text) {
     totalBonus += pts;
     world.state.score += pts;
@@ -82,16 +46,11 @@ export function createScorer() {
   function apply(world, events) {
     const paid = [];
     const s = world.state;
-    // A mission change or a retry breaks the streaks: a surgeon run is
-    // one mission's run, and a retried mission is not a clean one.
     if (s.mission !== prevMission) {
       preciseStreak = 0;
       bullseyeStreak = 0;
       prevMission = s.mission;
     }
-    // A ring flown past without a hit breaks the surgeon streak, the
-    // same way the world breaks its own streak; a zone flown past
-    // without a hit breaks the sharpshooter streak.
     const passedRings = countPassed(world.course.rings);
     if (passedRings > prevPassedRings && s.ringsHit === prevRingsHit) preciseStreak = 0;
     prevPassedRings = passedRings;
@@ -102,7 +61,6 @@ export function createScorer() {
     prevZonesHit = s.zonesHit;
 
     if (events & EVENT_RING) {
-      // The ring just hit is the one stamped with this step's time.
       const ring = world.course.rings.find((r) => r.hit && r.hitT === s.time);
       if (ring) {
         const err = Math.hypot(s.x - ring.x, s.alt - ring.alt);
@@ -125,7 +83,6 @@ export function createScorer() {
         paid.push(award(world, SCORE_SHARPSHOOTER * bullseyeStreak, `SHARPSHOOTER x${bullseyeStreak} +${SCORE_SHARPSHOOTER * bullseyeStreak}`));
       }
     } else if (events & EVENT_ZONE) {
-      // A zone hit that is not a bullseye breaks the sharpshooter run.
       bullseyeStreak = 0;
     }
     if (events & EVENT_MISSION_DONE && s.mission === 2 && s.cratesCollected >= SKY_CRATE_COUNT) {
@@ -189,7 +146,6 @@ function boot() {
     try {
       window.localStorage.setItem(BEST_KEY, String(value));
     } catch {
-      // Storage can be off (private windows): the best then lasts one visit.
     }
   }
 
@@ -322,7 +278,6 @@ function boot() {
       renderer.draw(world.state, world, screen, best);
     }
 
-    // Leaving the tab pauses a running game rather than flying unseen.
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && screen === SCREEN_PLAY) {
         screen = SCREEN_PAUSED;

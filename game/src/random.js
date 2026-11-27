@@ -1,6 +1,3 @@
-// Sky Courier — deterministic seeded random numbers.
-// Mulberry32: small, fast, and the same seed always deals the same world,
-// so a screenshot staged with &seed=7 is the same frame every time.
 export function createRandom(seed) {
   let a = seed >>> 0;
   return function next() {
@@ -12,9 +9,6 @@ export function createRandom(seed) {
   };
 }
 
-// Smooth 1-D value noise from the seeded stream: a fixed table of control
-// points, linearly interpolated with a smoothstep, so terrain is rolling
-// rather than jagged.
 export function makeNoise(rand, points, span) {
   const values = [];
   for (let i = 0; i < points; i += 1) values.push(rand() * 2 - 1);

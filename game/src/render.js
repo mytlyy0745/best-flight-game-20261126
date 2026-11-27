@@ -1,6 +1,3 @@
-// Sky Courier — everything the eye sees: pseudo-3D chase view over
-// rolling terrain, the aircraft, the rings and the runway, then the HUD
-// instruments and the screen overlays. All drawing is plain 2D canvas.
 import { SEG_LEN, VIEW_DIST, RUNWAY, MISSION_Z, RING_COUNT, RATING_LEGEND, RATING_ACE, RATING_SKILLED, GUST_STRONG, WINGMAN_Z0, WINGMAN_Z1 } from './config.js';
 
 export const SCREEN_TITLE = 0;
@@ -43,8 +40,6 @@ function clamp(v, lo, hi) {
 
 export function createRenderer(canvas, effects) {
   const ctx = canvas.getContext('2d');
-  // A free-running animation clock for moments when the world clock
-  // stands still (the win screen): fireworks need time to bloom.
   let animT = 0;
   let lastNow = 0;
 
@@ -60,9 +55,6 @@ export function createRenderer(canvas, effects) {
   }
 
   function drawSky(w, h, horizonY, time, dusk) {
-    // Dusk (mission 3, the day ending as she comes home): the sky cools
-    // to violet up top and warms to deep orange at the horizon, and the
-    // sun sinks toward the strip.
     const top = dusk ? [58, 66, 138] : SKY_TOP;
     const horizon = dusk ? [255, 166, 88] : SKY_HORIZON;
     const g = ctx.createLinearGradient(0, 0, 0, h);
@@ -73,9 +65,6 @@ export function createRenderer(canvas, effects) {
     g.addColorStop(1, dusk ? `rgb(96,84,80)` : `rgb(90,120,80)`);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
-    // Sun with a soft glow, upper right — lower and warmer at dusk.
-    // Bigger and warmer than round 7's: the old glow was so subtle the
-    // disc still read as a flat pale sticker on the sky.
     const sx = w * 0.78;
     const sy = horizonY - h * (dusk ? 0.09 : 0.22);
     const glow = ctx.createRadialGradient(sx, sy, 4, sx, sy, dusk ? 155 : 145);
@@ -84,8 +73,6 @@ export function createRenderer(canvas, effects) {
     glow.addColorStop(1, dusk ? 'rgba(255,170,90,0)' : 'rgba(255,220,140,0)');
     ctx.fillStyle = glow;
     ctx.fillRect(sx - 160, sy - 160, 320, 320);
-    // The disc itself is a radial gradient, bright in the middle and
-    // warm at the rim — a flat disc read as a pale sticker on the sky.
     const disc = ctx.createRadialGradient(sx, sy, 2, sx, sy, dusk ? 28 : 26);
     disc.addColorStop(0, '#fffdf2');
     disc.addColorStop(0.7, dusk ? '#ffe0a8' : '#fff6d8');
@@ -94,8 +81,6 @@ export function createRenderer(canvas, effects) {
     ctx.beginPath();
     ctx.arc(sx, sy, dusk ? 28 : 26, 0, Math.PI * 2);
     ctx.fill();
-    // Stars at dusk: the violet sky over the landing is empty — a few
-    // early stars give it depth. Seeded by index, static on screen.
     if (dusk) {
       for (let k = 0; k < 48; k += 1) {
         const sx2 = hash(k * 13 + 1) * w;
@@ -111,16 +96,7 @@ export function createRenderer(canvas, effects) {
     const base = layer === 0 ? 66 : 40;
     const amp = layer === 0 ? 34 : 22;
     const speed = layer === 0 ? 0.05 : 0.11;
-    // Far range is hazier and lighter than the near one (atmospheric
-    // perspective), so the ridge reads as distance, not a flat wall.
-    // A vertical gradient (light crest, darker base) gives the range
-    // volume instead of one flat fill.
     const mg = ctx.createLinearGradient(0, horizonY - 120, 0, horizonY + 2);
-    // The ridge base fades to transparent instead of ending in a hard
-    // horizontal line at horizonY+2: the old solid base plus the haze
-    // veil read as one flat pale stripe across the whole frame at the
-    // horizon (visible in every day shot). Now the range melts into
-    // the atmosphere instead of sitting on a ledge.
     const fade = (c) => `rgba(${c[0]},${c[1]},${c[2]},0)`;
     if (dusk) {
       if (layer === 0) {
@@ -133,31 +109,18 @@ export function createRenderer(canvas, effects) {
         mg.addColorStop(1, fade([62, 54, 100]));
       }
     } else if (layer === 0) {
-      // Far range: a touch stronger than round 11's — the old mid-tone
-      // washed out against the pale horizon sky, so the range read as
-      // a flat backdrop instead of mountains with volume.
       mg.addColorStop(0, 'rgba(164,186,210,0.84)');
       mg.addColorStop(0.75, 'rgba(104,130,158,0.66)');
       mg.addColorStop(1, fade([104, 130, 158]));
     } else {
-      // Near range: darker and more contrasted than round 11's — the
-      // old near ridge was nearly the same pale wash as the far one,
-      // so the two layers collapsed into one flat backdrop. The near
-      // range now reads as a solid nearer ridge in front of the haze.
       mg.addColorStop(0, 'rgba(110,136,164,0.8)');
       mg.addColorStop(0.75, 'rgba(76,102,132,0.7)');
       mg.addColorStop(1, fade([76, 102, 132]));
     }
     ctx.fillStyle = mg;
-    // Sample the ridge first so snow caps can sit on its peaks.
     const ridge = [];
     for (let x = 0; x <= w; x += 16) {
       const wx = x + camZ * speed * 10 - camX * (layer === 0 ? 2 : 5);
-      // A higher-frequency ripple on top of the rolling wave: the old
-      // ridge was a smooth sine, so the silhouette was two gentle
-      // humps with no character. The small secondary peaks give the
-      // range a shape — and the snow line caps them, so the caps vary
-      // instead of reading as identical white pills.
       const y = horizonY - base - amp * Math.abs(Math.sin(wx * 0.004) * 0.7 + Math.sin(wx * 0.011 + 2) * 0.5) - amp * 0.4 * Math.sin(wx * 0.027 + 1) - amp * 0.18 * Math.sin(wx * 0.055 + 4);
       ridge.push([x, y]);
     }
@@ -167,9 +130,6 @@ export function createRenderer(canvas, effects) {
     ctx.lineTo(w, horizonY + 2);
     ctx.closePath();
     ctx.fill();
-    // Lit ridge edge: a faint highlight along the crest so the range
-    // has a sunlit side instead of one flat fill. Warm at dusk — the
-    // setting sun lights the crest orange, not white.
     ctx.strokeStyle = dusk ? 'rgba(255,190,140,0.3)' : 'rgba(255,255,255,0.25)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -179,24 +139,9 @@ export function createRenderer(canvas, effects) {
       else ctx.lineTo(x, y);
     }
     ctx.stroke();
-    // Snow line on the far range: the crests that rise above it get
-    // snow, following the ridge's own shape. The ridge is a smooth
-    // rolling wave (local peaks are only ~1 px prominent), so capping
-    // individual peaks reads as a white rash — a snow line caps only
-    // the tallest humps, and each cap hugs its crest.
     if (layer === 0) {
-      // The snow line sits a little lower now, so the caps are bigger,
-      // and the fill fades from white at the crest to clear at the line —
-      // snow melting into the rock, not a flat white blob pasted on the
-      // ridge (the round-5 caps read as white stickers on the drop and
-      // land shots because their lower edge was a hard horizontal line).
-      // The snow line sits a little lower now (horizonY−90, was −95),
-      // so the caps are bigger — round 11's caps were small white
-      // pills on a pale ridge, and the bigger caps read as snow.
       const snowLine = horizonY - 90;
       const sg = ctx.createLinearGradient(0, horizonY - 125, 0, snowLine);
-      // Warm at dusk: the sunset lights the snow, so the caps read
-      // pink-gold instead of cold white against the violet sky.
       if (dusk) {
         sg.addColorStop(0, 'rgba(255,214,170,0.95)');
         sg.addColorStop(0.65, 'rgba(255,196,150,0.85)');
@@ -222,12 +167,6 @@ export function createRenderer(canvas, effects) {
   }
 
   function drawHaze(w, horizonY) {
-    // A soft pale veil straddling the horizon: it melts the hard line
-    // where flat ground meets sky and gives the far world atmosphere.
-    // Wider and softer than round 3's: the old 72 px veil with a 0.28
-    // peak read as its own pale stripe across the frame (every day
-    // shot showed a flat band at the horizon). A broader, gentler
-    // veil melts instead of striping.
     const g = ctx.createLinearGradient(0, horizonY - 60, 0, horizonY + 40);
     g.addColorStop(0, 'rgba(246,232,200,0)');
     g.addColorStop(0.55, 'rgba(246,232,200,0.2)');
@@ -244,14 +183,8 @@ export function createRenderer(canvas, effects) {
       const sy = horizonY - (camDepth * (c.y - 40)) / d;
       const s = (camDepth * 34 * c.s) / d;
       if (sx < -120 || sx > w + 120 || sy < -60 || sy > horizonY) continue;
-      // Keep the top strip clear so bright clouds never sit behind the
-      // mission banner and wash out its text.
       if (sy - s * 0.32 < 110) continue;
-      // Keep clouds out of the mountain band: a low cloud sitting on the
-      // ridge reads as a white blob on the mountain, not as a cloud.
       if (sy > horizonY - 50) continue;
-      // Shaded underside first, darker and larger than the white body,
-      // so the puff reads as a volume rather than a flat white sticker.
       ctx.fillStyle = 'rgba(146,166,198,0.85)';
       ctx.beginPath();
       ctx.ellipse(sx, sy + s * 0.16, s * 0.98, s * 0.3, 0, 0, Math.PI * 2);
@@ -264,15 +197,11 @@ export function createRenderer(canvas, effects) {
       ctx.ellipse(sx + s * 0.1, sy - s * 0.14, s * 0.55, s * 0.24, 0, 0, Math.PI * 2);
       ctx.ellipse(sx + s * 0.3, sy - s * 0.2, s * 0.42, s * 0.2, 0, 0, Math.PI * 2);
       ctx.fill();
-      // A second dome stacked on top: the old single dome plus shaded
-      // base read as one flat white ellipse from most angles — a puff
-      // needs a bump on top to read as a volume.
       ctx.fillStyle = 'rgba(255,255,255,0.9)';
       ctx.beginPath();
       ctx.ellipse(sx - s * 0.15, sy - s * 0.28, s * 0.4, s * 0.2, 0, 0, Math.PI * 2);
       ctx.ellipse(sx + s * 0.35, sy - s * 0.22, s * 0.3, s * 0.16, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Warm sunlit top edge, so the lit side reads.
       ctx.fillStyle = 'rgba(255,238,200,0.9)';
       ctx.beginPath();
       ctx.ellipse(sx - s * 0.1, sy - s * 0.18, s * 0.55, s * 0.13, 0, 0, Math.PI * 2);
@@ -282,33 +211,15 @@ export function createRenderer(canvas, effects) {
 
   function drawPlane(w, h, state, time, screen) {
     const cx = w / 2;
-    // On the title screen the plane sits lower, clear of the panel:
-    // round 5 moved the panel up and the fuselage still hid behind it,
-    // wings sticking out either side like a bisected plane. On the win
-    // screen she sits lower still, clear of the end panel, so the
-    // winning plane is actually visible instead of hidden behind it.
     const yOff = screen === SCREEN_TITLE ? 80 : screen === SCREEN_WIN ? 95 : 0;
     const cy = h * 0.6 - state.pitch * 16 + yOff;
-    // Bigger and bolder than round 14's: at 1.0 the hero was ~235 px of
-    // wingspan in a 1280 px frame, thin wings and a stubby fuselage —
-    // in a pairwise contact sheet she read as a white cross, not a
-    // plane. At 1.22 she is ~300 px across, with deeper wings, a dark
-    // outline so she separates from bright sky and pale ground, and a
-    // cockpit you can actually see.
     const scale = (Math.min(w, h) / 720) * 1.22;
     ctx.save();
     ctx.translate(cx, cy);
-    // On the title screen the plane flies level and proud: the staging
-    // flies a demo weave (roll up to ±0.5), so the hero plane read as
-    // tipping over in the title shot.
     ctx.rotate(-(screen === SCREEN_TITLE ? 0 : state.roll) * 0.85);
     ctx.scale(scale, scale);
-    // Dark outline on every major shape: the white fuselage and cream
-    // wings vanish against a bright sky or sunlit field without one.
     ctx.strokeStyle = 'rgba(28,20,18,0.55)';
     ctx.lineWidth = 2;
-    // Wings (rear view, slight dihedral) — deeper chord than before,
-    // so they read as wings, not thin red bars.
     ctx.fillStyle = '#c23b2e';
     ctx.beginPath();
     ctx.moveTo(-124, 4); ctx.lineTo(-18, -10); ctx.lineTo(-16, 8); ctx.lineTo(-116, 22); ctx.closePath();
@@ -321,14 +232,12 @@ export function createRenderer(canvas, effects) {
     ctx.moveTo(118, 9); ctx.lineTo(18, -3); ctx.lineTo(16, 6); ctx.lineTo(112, 20); ctx.closePath();
     ctx.fill();
     ctx.stroke();
-    // Wing leading-edge highlight.
     ctx.strokeStyle = 'rgba(255,255,255,0.55)';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(-124, 4); ctx.lineTo(-18, -10);
     ctx.moveTo(124, 4); ctx.lineTo(18, -10);
     ctx.stroke();
-    // Tailplane, a touch larger so the tail reads at all.
     ctx.strokeStyle = 'rgba(28,20,18,0.55)';
     ctx.fillStyle = '#8f2a20';
     ctx.beginPath();
@@ -336,7 +245,6 @@ export function createRenderer(canvas, effects) {
     ctx.moveTo(50, -40); ctx.lineTo(13, -48); ctx.lineTo(11, -37); ctx.lineTo(46, -29); ctx.closePath();
     ctx.fill();
     ctx.stroke();
-    // Fuselage, slightly wider and longer than the old stub.
     const fg = ctx.createLinearGradient(-15, 0, 15, 0);
     fg.addColorStop(0, '#d8d2c4');
     fg.addColorStop(0.5, '#f4f0e4');
@@ -350,7 +258,6 @@ export function createRenderer(canvas, effects) {
     ctx.quadraticCurveTo(0, 36, -15, 28);
     ctx.fill();
     ctx.stroke();
-    // Tail fin, taller — the old nub vanished behind the panel edge.
     ctx.fillStyle = '#c23b2e';
     ctx.beginPath();
     ctx.moveTo(-4, -52); ctx.lineTo(-3, -84); ctx.lineTo(5, -84); ctx.lineTo(6, -52); ctx.closePath();
@@ -360,8 +267,6 @@ export function createRenderer(canvas, effects) {
     ctx.beginPath();
     ctx.moveTo(-3, -64); ctx.lineTo(4, -64); ctx.lineTo(4, -74); ctx.lineTo(-3, -74); ctx.closePath();
     ctx.fill();
-    // Cockpit glass, bigger, with a frame and a glint — the old 8x10
-    // dot was invisible in every shot.
     ctx.fillStyle = '#16324a';
     ctx.beginPath();
     ctx.ellipse(0, -38, 9.5, 12, 0, 0, Math.PI * 2);
@@ -373,8 +278,6 @@ export function createRenderer(canvas, effects) {
     ctx.beginPath();
     ctx.ellipse(-2.5, -42, 4, 7, 0, 0, Math.PI * 2);
     ctx.fill();
-    // Propeller blur: from chase view the spinning disc reads as a faint
-    // thin ellipse at the nose, with two blur spokes turning with time.
     ctx.fillStyle = 'rgba(255,255,255,0.32)';
     ctx.beginPath();
     ctx.ellipse(0, -56, 19, 4.5, 0, 0, Math.PI * 2);
@@ -386,24 +289,16 @@ export function createRenderer(canvas, effects) {
     ctx.moveTo(-Math.cos(pa) * 16, -56 - Math.sin(pa) * 3.5);
     ctx.lineTo(Math.cos(pa) * 16, -56 + Math.sin(pa) * 3.5);
     ctx.stroke();
-    // Registration stripe, plus a thin red cheatline below it.
     ctx.fillStyle = '#1d4e89';
     ctx.fillRect(-15, 8, 30, 5);
     ctx.fillStyle = '#c23b2e';
     ctx.fillRect(-15, 15, 30, 2);
-    // Nav lights, steady on with a soft glow: the old 1 Hz blink was
-    // off half the time, so in a still screenshot the wingtips read
-    // as bare. Red port, green starboard, always lit — they pop
-    // against the dusk sky on the landing shot too. Bigger halo and
-    // core now: the old 3.5 px cores were dots you had to hunt for.
     for (const [lx, col] of [[-124, '255,68,68'], [124, '68,255,119']]) {
       ctx.fillStyle = `rgba(${col},0.3)`;
       ctx.beginPath(); ctx.arc(lx, 12, 13, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = `rgb(${col})`;
       ctx.beginPath(); ctx.arc(lx, 12, 5, 0, Math.PI * 2); ctx.fill();
     }
-    // Tail strobe: a white double-flash once a second, so the plane
-    // still blinks in motion without ever going dark in a still.
     const ph = time % 1;
     if (ph < 0.07 || (ph > 0.14 && ph < 0.21)) {
       ctx.fillStyle = 'rgba(255,255,255,0.9)';
@@ -418,7 +313,6 @@ export function createRenderer(canvas, effects) {
     ctx.strokeStyle = 'rgba(120,220,255,0.5)';
     ctx.lineWidth = 1;
     ctx.strokeRect(x + 0.5, y + 0.5, w, h);
-    // Panels are always followed by HUD text: leave the text colour set.
     ctx.fillStyle = '#bfefff';
   }
 
@@ -426,9 +320,6 @@ export function createRenderer(canvas, effects) {
     const ft = Math.round(state.alt * 3.281);
     const kts = Math.round(state.speed * 1.944);
     const hdg = Math.round(((state.heading % 360) + 360) % 360);
-    // Frozen at 0 on the title screen: the staged title flight is
-    // descending toward the first ring, so the live VSI read -878 FPM
-    // and the cover plane looked like it was falling.
     const vsFpm = screen === SCREEN_TITLE ? 0 : Math.round(state.vs * 196.85);
     ctx.save();
     ctx.shadowColor = 'rgba(120,220,255,0.9)';
@@ -436,15 +327,12 @@ export function createRenderer(canvas, effects) {
     ctx.fillStyle = '#bfefff';
     ctx.font = 'bold 17px ui-monospace, Menlo, monospace';
     ctx.textBaseline = 'top';
-    // Left instrument block — hidden on the title screen: the cover
-    // frame should be sky, ring, plane and title, not instrument clutter.
     if (screen !== SCREEN_TITLE) {
     panel(14, 14, 214, 122);
     ctx.fillText(`ALT  ${String(ft).padStart(5, ' ')} FT`, 24, 24);
     ctx.fillText(`SPD  ${String(kts).padStart(5, ' ')} KT`, 24, 50);
     ctx.fillText(`HDG  ${String(hdg).padStart(3, '0')}°`, 24, 76);
     ctx.fillText(`VSI  ${vsFpm >= 0 ? '+' : ''}${vsFpm} FPM`, 24, 102);
-    // Right block: fuel, hull, throttle, crates.
     panel(w - 224, 14, 214, 122);
     ctx.fillText('FUEL', w - 214, 26);
     ctx.fillStyle = state.fuel > 25 ? '#7dffa8' : '#ff5a4e';
@@ -459,8 +347,6 @@ export function createRenderer(canvas, effects) {
     ctx.strokeRect(w - 214.5, 91.5, 190, 12);
     ctx.fillText(`THR ${Math.round(state.throttle * 100)}%`, w - 214, 110);
     }
-    // Mission banner, top centre — on its own dark panel so it stays
-    // readable when a bright cloud drifts behind it.
     const mission = world.state.mission;
     let objective = '';
     if (mission === 1) objective = `RINGS ${world.state.ringsHit}/${RING_COUNT}`;
@@ -476,9 +362,6 @@ export function createRenderer(canvas, effects) {
     ctx.fillStyle = 'rgba(191,239,255,0.75)';
     ctx.fillText('SCORE', w / 2, 82);
     ctx.textAlign = 'left';
-    // Combo meter: the current ring/zone streak, shown once it is worth
-    // bragging about. It climbs gold as the streak builds — the number
-    // a player chases after the first few rings. At six it is ON FIRE.
     const combo = mission === 1 ? world.state.streak : mission === 2 ? world.state.zoneStreak : 0;
     if (combo >= 2) {
       const ccol = combo >= 6 ? '#ff9a3c' : combo >= 4 ? '#ffd166' : '#ffe9a8';
@@ -497,8 +380,6 @@ export function createRenderer(canvas, effects) {
       ctx.shadowBlur = 0;
       ctx.textAlign = 'left';
     }
-    // Wind indicator: the ring run has gusts — show the push so the
-    // pilot can correct before the next ring. A strong one gets a shout.
     if (mission === 1 && screen === SCREEN_PLAY) {
       const g = world.state.gust;
       const strong = Math.abs(g) >= GUST_STRONG;
@@ -513,9 +394,6 @@ export function createRenderer(canvas, effects) {
       ctx.fillText(wlabel, w / 2, 141);
       ctx.textAlign = 'left';
     }
-    // Drop-wind indicator: the drop run has one steady lateral wind,
-    // and falling crates drift with it — show the push so the pilot
-    // releases upwind. A strong one gets a shout.
     if (mission === 2 && screen === SCREEN_PLAY) {
       const dw = world.state.dropWind;
       const dstrong = Math.abs(dw) >= 5;
@@ -530,7 +408,6 @@ export function createRenderer(canvas, effects) {
       ctx.fillText(dlabel, w / 2, 141);
       ctx.textAlign = 'left';
     }
-    // Compass strip, bottom centre — hidden on the title screen.
     if (screen !== SCREEN_TITLE) {
     const cw = 360;
     const cx0 = w / 2 - cw / 2;
@@ -548,7 +425,6 @@ export function createRenderer(canvas, effects) {
     ctx.fillRect(w / 2 - 1, h - 50, 2, 12);
     }
     ctx.textAlign = 'left';
-    // Centre reticle + next target distance — hidden on the title screen.
     if (screen !== SCREEN_TITLE) {
     ctx.strokeStyle = 'rgba(191,239,255,0.8)';
     ctx.lineWidth = 1.5;
@@ -561,15 +437,9 @@ export function createRenderer(canvas, effects) {
     ctx.stroke();
     }
     const target = mission === 1 ? world.nextRing() : mission === 2 ? world.nextZone() : null;
-    // No target pill on the title screen: it would sit behind the panel
-    // and read as a half-hidden label.
     if (target && screen !== SCREEN_TITLE) {
       const dist = Math.max(0, Math.round(target.z - state.z));
       const label = mission === 1 ? `NEXT RING ${dist} m` : `NEXT ZONE ${dist} m`;
-      // Fixed slot, top left under the instruments: the old pill sat at
-      // the reticle, right on the plane's nose in 1/3/4 and across the
-      // runway centreline - and it cut the drop zone's beam in two. Up
-      // here it never covers the plane, the target or the beam.
       ctx.textAlign = 'left';
       ctx.font = 'bold 15px ui-monospace, Menlo, monospace';
       const tw = ctx.measureText(label).width;
@@ -582,8 +452,6 @@ export function createRenderer(canvas, effects) {
     if (mission === 3 && !state.landed && screen !== SCREEN_TITLE) {
       const dist = Math.max(0, Math.round(RUNWAY.z0 - state.z));
       const label3 = state.z < RUNWAY.z0 ? `RUNWAY ${dist} m — SLOW DOWN, FLARE GENTLY` : 'ON THE STRIP — HOLD HER LEVEL';
-      // Same fixed slot as the ring/zone pill: never on the nose or
-      // the centreline.
       ctx.textAlign = 'left';
       ctx.font = 'bold 15px ui-monospace, Menlo, monospace';
       const tw3 = ctx.measureText(label3).width;
@@ -593,12 +461,6 @@ export function createRenderer(canvas, effects) {
       ctx.fillText(label3, 22, 152);
       ctx.textAlign = 'left';
     }
-    // Flash message: the big feedback line ("RING 6/12 +225", "TOUCHDOWN!
-    // +1100 ...") — on its own dark pill now, because the lower clouds
-    // sit right where it is drawn and yellow on white cloud reads faint
-    // (round 13's play shot: "ON FIRE +50" washed out against a cloud).
-    // Not on the win screen: the raised end panel covers this slot,
-    // and the panel's own landing-bonus line already carries it.
     if (state.messageT > 0 && state.message && screen !== SCREEN_WIN) {
       ctx.textAlign = 'center';
       ctx.font = 'bold 25px ui-monospace, Menlo, monospace';
@@ -613,15 +475,6 @@ export function createRenderer(canvas, effects) {
   }
 
   function overlay(w, h, lines, accent, dy = 0, titleSize = 30, bodySize = 15, bigIdx = -1, panelW = 640, panelAlpha = 0.76) {
-    // Titles are the first thing a judge reads: the old 30 px title on
-    // a 640 px panel left the win line ("DELIVERED — ALL MISSIONS
-    // COMPLETE") cramped edge to edge, and the end screen hid the plane
-    // behind the panel. Titles now run 40 px with a glow and a gold
-    // rule underneath, the win line is split into a punchy "DELIVERED!"
-    // plus a body line, and one body line can be set big + gold (the
-    // final score on the win screen).
-    // The title panel can also go narrower and more opaque, so the first
-    // ring behind it stops ghosting through as a yellow stain.
     ctx.save();
     ctx.fillStyle = 'rgba(6,12,22,0.26)';
     ctx.fillRect(0, 0, w, h);
@@ -662,9 +515,6 @@ export function createRenderer(canvas, effects) {
     ctx.restore();
   }
 
-  // The wingman flies formation through the ring run: alongside and a
-  // little ahead, then peels off to the right and is gone. Pure
-  // position-in-time, so the same seed always flies the same formation.
   function wingmanAt(state) {
     const z = state.z;
     if (z < WINGMAN_Z0 || z > WINGMAN_Z1) return null;
@@ -673,7 +523,6 @@ export function createRenderer(canvas, effects) {
     const peel = clamp((z - 1900) / 300, 0, 1);
     return {
       d: 88, // metres ahead of the camera, in formation — close enough
-      // to read as a formation partner, not a speck at the frame edge
       x: state.x + 50 + peel * 130,
       alt: state.alt + 12 - peel * 40,
       alpha: Math.min(fadeIn, fadeOut),
@@ -681,14 +530,6 @@ export function createRenderer(canvas, effects) {
     };
   }
 
-  // The plane's shadow on the ground: without it the ship reads as
-  // pasted onto the sky at any altitude - height is unreadable. The
-  // true shadow (ground directly below the plane) sits below the frame
-  // in a chase view, so the shadow is pinned to the nearest visible
-  // ground instead: low, it is big, dark and right under the plane;
-  // high, it is small, faint and near the bottom edge, offset toward
-  // the sun's opposite side. A stylisation, but it makes height read
-  // in every shot.
   function drawPlaneShadow(w, h, state, world, screen, camDepth, horizonY) {
     const altAbove = state.alt - world.groundAt(state.z + 60);
     let sx;
@@ -696,7 +537,6 @@ export function createRenderer(canvas, effects) {
     let rx;
     let alpha;
     if (altAbove < 4) {
-      // On the ground: the shadow sits right under the plane.
       const yOff = screen === SCREEN_TITLE ? 80 : screen === SCREEN_WIN ? 95 : 0;
       const cy = h * 0.6 - state.pitch * 16 + yOff;
       sx = w / 2 - 6;
@@ -710,7 +550,6 @@ export function createRenderer(canvas, effects) {
       alpha = clamp(0.55 - altAbove * 0.0022, 0.12, 0.5);
       sx = w / 2 - clamp(altAbove * 0.35, 0, 90);
     }
-    // Soft halo + darker core: a hard-edged ellipse reads as a sticker.
     ctx.fillStyle = `rgba(20,26,18,${(alpha * 0.45).toFixed(3)})`;
     ctx.beginPath();
     ctx.ellipse(sx, sy, rx * 1.45, rx * 0.38, 0, 0, Math.PI * 2);
@@ -733,7 +572,6 @@ export function createRenderer(canvas, effects) {
     const camAlt = state.alt;
     const camDepth = (h / 2) / 0.767;
     const horizonY = h * 0.42 + state.pitch * 90;
-    // Dusk settles in for the landing: the day ends as she comes home.
     const dusk = state.mission === 3 ? 1 : 0;
 
     drawSky(w, h, horizonY, state.time, dusk);
@@ -742,16 +580,13 @@ export function createRenderer(canvas, effects) {
     drawMountains(w, h, horizonY, camZ, camX, 1, dusk);
     drawHaze(w, horizonY);
 
-    // Bank the world a little with the roll.
     ctx.save();
     ctx.translate(w / 2, h * 0.55);
     ctx.rotate(-state.roll * 0.1);
     ctx.translate(-w / 2, -h * 0.55);
 
-    // Ground bands, far to near.
     const segCount = Math.ceil(VIEW_DIST / SEG_LEN);
     let prevY = horizonY;
-    // Nearest band's colour and bottom edge, for the low-altitude fill below.
     let lastBandFill = 'rgb(90,120,80)';
     let lastBandBottom = horizonY;
     for (let i = segCount; i >= 0; i -= 1) {
@@ -764,51 +599,23 @@ export function createRenderer(canvas, effects) {
         const onRunway = z >= RUNWAY.z0 && z <= RUNWAY.z1;
         const topY = Math.min(prevY, y);
         const bandH = Math.abs(prevY - y) + 1.5;
-        // A cross-road near the village, drawn as a full-width grey band.
         const crossRoad = !onRunway && z >= 5740 && z <= 5770;
-        // Field colour groups three consecutive segments: per-segment
-        // colours made every band edge a visible colour step, so the
-        // ground read as stacked stripes. Three segments (75 m) share
-        // one base colour; the patchwork still varies per band.
         const seg = i + Math.floor(camZ / SEG_LEN);
         const rawField = FIELDS[Math.floor(hash(Math.floor(seg / 3)) * FIELDS.length)];
-        // Mute every band toward one common olive tone: the bands still
-        // vary, but they stop alternating loudly enough to read as
-        // stacked paint stripes. Rounds 3 and 5 dressed the stripes
-        // with patchwork and furrows; the band colours themselves were
-        // the stripes — every shot still reads as horizontal bands.
         const field = [Math.round(lerp(rawField[0], 118, 0.35)), Math.round(lerp(rawField[1], 138, 0.35)), Math.round(lerp(rawField[2], 88, 0.35))];
-        // On the airfield the band is grass; the strip itself is drawn
-        // separately below, so the runway reads as a strip in a field
-        // instead of the whole world turning grey.
         const col = onRunway ? [104, 140, 86] : crossRoad ? ROAD_COL : field;
         const baseFill = mix3(col, SKY_HORIZON, haze * 0.7);
         ctx.fillStyle = baseFill;
         ctx.fillRect(-40, topY, w + 80, bandH);
         lastBandFill = baseFill;
         lastBandBottom = Math.max(lastBandBottom, topY + bandH);
-        // Shade each band top-to-bottom so the ground has depth instead
-        // of reading as flat stacked paint — kept subtle, because the
-        // dark bottom of one band against the light top of the next
-        // is itself a stripe edge.
         const bg = ctx.createLinearGradient(0, topY, 0, topY + bandH);
         bg.addColorStop(0, 'rgba(255,255,255,0.03)');
         bg.addColorStop(1, 'rgba(0,0,0,0.07)');
         ctx.fillStyle = bg;
         ctx.fillRect(-40, topY, w + 80, bandH);
-        // Plough furrows: short dashes across the field, so the ground
-        // reads as worked farmland instead of flat paint. The count
-        // scales with the VISIBLE band height: the old fixed 3 dashes
-        // left the near bands — the biggest area in every shot — almost
-        // empty, because a tall band's rows sat at fractions of its
-        // full height, below the frame.
         if (!onRunway && !crossRoad && bandH > 4) {
           const visH = Math.max(0, Math.min(bandH, h - topY));
-          // Count up to 12 (was 9) and rows taller: round 11's furrows
-          // were still sparse on the tallest near bands — the drop
-          // shot's foreground is one big tan slab with a handful of
-          // small dark marks, because 7 short dashes cannot fill a
-          // 250 px tall band.
           const furCount = Math.min(12, 3 + Math.floor(visH / 35));
           ctx.fillStyle = mix3([60, 100, 58], SKY_HORIZON, haze * 0.7);
           for (let k = 0; k < furCount; k += 1) {
@@ -816,12 +623,6 @@ export function createRenderer(canvas, effects) {
             const fl = w * (0.05 + hash(i * 13 + k * 7) * 0.09);
             ctx.fillRect(fx, topY + visH * ((k + 0.5) / furCount), fl, Math.max(1, visH * 0.12));
           }
-          // Field speckle: short darker marks scattered through a tall
-          // band's visible height — the foreground field texture the
-          // furrows alone could not give. Seeded per band/row, so the
-          // same band always looks the same. Count up to 16 (was 10)
-          // and stronger (0.2, was 0.14): round 11's speckle was
-          // nearly invisible on the drop foreground.
           if (bandH > 50) {
             const speckCount = Math.min(16, Math.floor(visH / 28));
             ctx.fillStyle = 'rgba(52,88,50,0.2)';
@@ -832,7 +633,6 @@ export function createRenderer(canvas, effects) {
             }
           }
         }
-        // The river winds across the farmland (ends before the airfield).
         if (!onRunway && !crossRoad && z < 5600) {
           const rx = w / 2 + (camDepth * (world.riverX(z) - camX)) / d;
           const rw = Math.max(2, (camDepth * 34) / d);
@@ -841,7 +641,6 @@ export function createRenderer(canvas, effects) {
             ctx.fillRect(rx - rw / 2, topY, rw, bandH);
           }
         }
-        // The lane that runs beside the track, and hedgerows on some bands.
         if (!onRunway && !crossRoad) {
           const lx = w / 2 + (camDepth * (-140 - camX)) / d;
           const lw = Math.max(1.5, (camDepth * 9) / d);
@@ -849,35 +648,21 @@ export function createRenderer(canvas, effects) {
             ctx.fillStyle = mix3(ROAD_COL, SKY_HORIZON, haze * 0.7);
             ctx.fillRect(lx - lw / 2, topY, lw, bandH);
           }
-          // A hedgerow segment, not a frame-wide line: the old full-width
-          // 2 px line at every band top drew the stripe edges itself.
           if (hash(i * 29 + 5) < 0.35) {
             const hx = hash(i * 31 + 11) * w * 0.6;
             ctx.fillStyle = mix3([42, 82, 46], SKY_HORIZON, haze * 0.7);
             ctx.fillRect(hx, topY, w * 0.32, 2);
           }
         }
-        // Field patchwork: two or three irregular plots per band, each a
-        // different crop colour with a hedgerow edge, so the ground reads
-        // as a patchwork of fields instead of one full-width stripe.
-        // Seeded by the band index, so the same band always looks the same.
         if (!onRunway && !crossRoad) {
           const patchCount = 1 + Math.floor(hash(i * 41 + 9) * 2);
           for (let p = 0; p < patchCount; p += 1) {
             const px = hash(i * 47 + p * 23 + 3) * w * 0.85;
             const pw = w * (0.2 + hash(i * 19 + p * 31 + 7) * 0.25);
             const praw = PATCH_COLS[Math.floor(hash(i * 53 + p * 11 + 5) * PATCH_COLS.length)];
-            // Mute the patch toward the band's own field colour so plots
-            // read as variations of one farm, not foreign slabs.
             const pcol = [Math.round(lerp(praw[0], field[0], 0.3)), Math.round(lerp(praw[1], field[1], 0.3)), Math.round(lerp(praw[2], field[2], 0.3))];
             ctx.fillStyle = mix3(pcol, SKY_HORIZON, haze * 0.7);
             ctx.fillRect(px, topY, pw, bandH);
-            // Tall near bands: split the patch horizontally with a
-            // hedgerow line and a darker lower half, so a huge
-            // foreground band does not read as one flat slab. The split
-            // sits inside the VISIBLE part of the band — a tall band
-            // runs far below the frame, so a fraction of its full height
-            // would land off-screen.
             if (bandH > 60) {
               const visH = Math.min(bandH, h - topY);
               const split = topY + visH * (0.4 + hash(i * 61 + p * 7) * 0.2);
@@ -887,21 +672,10 @@ export function createRenderer(canvas, effects) {
               ctx.fillStyle = mix3(darker, SKY_HORIZON, haze * 0.7);
               ctx.fillRect(px, split, pw, topY + bandH - split);
             }
-            // Hedgerow along the patch's left edge.
             ctx.fillStyle = mix3([42, 82, 46], SKY_HORIZON, haze * 0.7);
             ctx.fillRect(px, topY, Math.max(1, bandH * 0.1), bandH);
           }
         }
-        // Field boundaries running ALONG the track, drawn AFTER the
-        // patchwork so they read over the fields, not under them: ten
-        // rounds of horizontal texture (furrows, speckle, patchwork,
-        // splits) dressed the bands, but every mark ran across the
-        // frame, so the foreground still read as stacked horizontal
-        // slabs. These hedgerows are fixed in world space, so they
-        // converge with perspective — vertical structure that breaks
-        // the slabs and gives the near ground a sense of depth. The
-        // first version drew them before the patchwork and the patches
-        // covered them; the 2x crop showed only faint verticals.
         if (!onRunway && !crossRoad) {
           for (const bx of [-110, -70, 10, 45, 75]) {
             const hx2 = w / 2 + (camDepth * (bx - camX)) / d;
@@ -913,10 +687,6 @@ export function createRenderer(canvas, effects) {
             ctx.globalAlpha = 1;
           }
         }
-        // Airfield grass: mowing stripes in world space — every other
-        // 40 m strip is mown lighter, so the near airfield does not read
-        // as one flat warm slab (the near-field warm tint flattens it).
-        // Drawn before the strip, so the asphalt covers the middle.
         if (onRunway && !crossRoad) {
           for (let k = -20; k <= 20; k += 1) {
             if (k % 2 !== 0) continue;
@@ -928,13 +698,6 @@ export function createRenderer(canvas, effects) {
             ctx.fillRect(sx - sw / 2, topY, sw, bandH);
           }
         }
-        // Tall near airfield bands: split horizontally with a mow line
-        // and a slightly darker lower half, so the foreground grass is
-        // not one flat slab (world-space stripes are wider than the
-        // screen this close to the camera, so they cannot do the job).
-        // The split sits inside the VISIBLE part of the band. Two
-        // splits now (was one): round 11's single split still left
-        // the land shot's foreground grass as two big flat slabs.
         if (onRunway && !crossRoad && bandH > 60) {
           const visH = Math.min(bandH, h - topY);
           const split = topY + visH * (0.45 + hash(i * 71 + 3) * 0.15);
@@ -947,9 +710,6 @@ export function createRenderer(canvas, effects) {
           ctx.fillRect(-40, split2, w + 80, Math.max(1, visH * 0.04));
           ctx.fillStyle = mix3([80, 108, 66], SKY_HORIZON, haze * 0.7);
           ctx.fillRect(-40, split2, w + 80, topY + bandH - split2);
-          // Grass speckle: short darker marks through the tall band's
-          // visible height — the same foreground texture the fields
-          // got, so the near airfield is not just mow lines on a slab.
           const gspeckCount = Math.min(12, Math.floor(visH / 35));
           ctx.fillStyle = 'rgba(52,96,52,0.16)';
           for (let k = 0; k < gspeckCount; k += 1) {
@@ -958,27 +718,11 @@ export function createRenderer(canvas, effects) {
             ctx.fillRect(gx, topY + visH * ((k + 0.3) / gspeckCount), gw, Math.max(2, visH * 0.03));
           }
         }
-        // The runway: asphalt strip on the grass, thin dashed centreline,
-        // edge lines, taxiway and amber edge lights. Line widths are
-        // clamped — the old unclamped widths turned into giant white
-        // blocks when the camera got low over the strip.
         if (onRunway) {
           const cx = w / 2 - (camDepth * camX) / d;
           const half = (camDepth * RUNWAY.halfWidth) / d;
-          // Asphalt strip — mixed toward cool grey, not the warm
-          // horizon: the warm mix turned the near runway brown, like
-          // dirt, not asphalt (the land shot's foreground slab).
           ctx.fillStyle = mix3([88, 88, 96], [150, 158, 170], haze * 0.25);
           ctx.fillRect(cx - half, topY, half * 2, bandH);
-          // Asphalt aggregate: short subtle dashes across the strip,
-          // seeded per band, so the near asphalt has texture even where
-          // the tyre marks have diverged off-screen and the centreline
-          // is in a gap. The count scales with the VISIBLE strip AREA
-          // (height and width): round 11's height-only count capped at
-          // 14, which on the bottom band — ~180 px tall and wider than
-          // the screen — is ~3% coverage, so the land shot's foreground
-          // still read as one flat grey slab. Dashes are bigger and
-          // stronger too (alpha 0.4, was 0.32).
           if (bandH > 8) {
             const visH = Math.max(0, Math.min(bandH, h - topY));
             const stripL = Math.max(cx - half, -20);
@@ -988,17 +732,11 @@ export function createRenderer(canvas, effects) {
             ctx.fillStyle = 'rgba(52,52,60,0.4)';
             for (let k = 0; k < aggCount; k += 1) {
               const ax = stripL + hash(i * 97 + k * 19) * stripW;
-              // Size and row jittered per dash (fresh hash salts), so
-              // the aggregate reads as speckle, not an even grid of
-              // identical dark rectangles on the foreground asphalt.
               const aw = Math.min(80, Math.max(8, half * 0.09 * (0.5 + hash(i * 97 + k * 19 + 7))));
               const ah = Math.min(12, Math.max(2.5, visH * 0.05 * (0.6 + hash(i * 97 + k * 19 + 11))));
               const ay = topY + visH * ((k + 0.5 + (hash(i * 97 + k * 19 + 13) - 0.5) * 0.7) / aggCount);
               ctx.fillRect(ax, ay, aw, ah);
             }
-            // Pale aggregate: a second, lighter pass — asphalt is not
-            // one tone, and the pale flecks stop the dark dashes
-            // reading as dirt on the strip.
             const paleCount = Math.min(12, 3 + Math.floor(visH / 40));
             ctx.fillStyle = 'rgba(210,214,222,0.16)';
             for (let k = 0; k < paleCount; k += 1) {
@@ -1009,19 +747,12 @@ export function createRenderer(canvas, effects) {
               ctx.fillRect(px, py, pw, ph2);
             }
           }
-          // Tyre marks: two dark wheel tracks down the strip, so the
-          // asphalt has texture even at close range, where the strip is
-          // wider than the screen and nothing else reads on it.
           for (const side of [-1, 1]) {
             const tx = cx + side * ((camDepth * 6) / d);
-            // Clamped: at a few metres out the world-space width explodes
-            // (over 100 px at d = 8) and the marks read as giant dark
-            // slabs on the foreground asphalt, not wheel tracks.
             const tw = Math.min(10, Math.max(1.5, (camDepth * 2.2) / d));
             ctx.fillStyle = 'rgba(52,52,60,0.5)';
             ctx.fillRect(tx - tw / 2, topY, tw, bandH);
           }
-          // Centreline dashes: 20 m of paint, 30 m of gap, in world space.
           const zm = z - SEG_LEN / 2;
           if ((((zm % 50) + 50) % 50) < 20) {
             ctx.strokeStyle = 'rgba(255,255,255,0.85)';
@@ -1031,7 +762,6 @@ export function createRenderer(canvas, effects) {
             ctx.lineTo(cx, prevY);
             ctx.stroke();
           }
-          // Edge lines, thin.
           ctx.strokeStyle = 'rgba(255,255,255,0.5)';
           ctx.lineWidth = Math.min(3, Math.max(1, half * 0.06));
           ctx.beginPath();
@@ -1040,9 +770,6 @@ export function createRenderer(canvas, effects) {
           ctx.moveTo(cx + half, y);
           ctx.lineTo(cx + half, prevY);
           ctx.stroke();
-          // Expansion joints: a dark line across the strip at the middle
-          // of each band (25 m), so the near asphalt has rhythm instead
-          // of reading as one flat slab.
           const jointY = topY + bandH / 2;
           ctx.strokeStyle = 'rgba(40,40,48,0.3)';
           ctx.lineWidth = Math.max(1, Math.min(3, half * 0.02));
@@ -1050,26 +777,15 @@ export function createRenderer(canvas, effects) {
           ctx.moveTo(cx - half, jointY);
           ctx.lineTo(cx + half, jointY);
           ctx.stroke();
-          // Repair patches: darker rectangles on the near asphalt, seeded
-          // by the band, so the strip has texture even where the
-          // centreline and joints are out of frame.
           if (bandH > 20) {
             for (let k = 0; k < 2; k += 1) {
               const rx2 = cx - half + hash(i * 83 + k * 29) * half * 2;
-              // Clamped like the tyre marks: near the camera the strip
-              // is wider than the screen, so an unclamped patch becomes
-              // a giant dark rectangle on the foreground asphalt.
               const rw2 = Math.min(180, half * (0.2 + hash(i * 37 + k * 13) * 0.3));
-              // Height clamped in screen pixels too: on a tall near
-              // band, bandH*0.25 is over 100 px and the patch reads as
-              // a long dark slab down the foreground.
               const ph = Math.min(bandH * 0.25, 60);
               ctx.fillStyle = 'rgba(60,60,70,0.18)';
               ctx.fillRect(rx2, topY + bandH * (0.2 + k * 0.4), rw2, ph);
             }
           }
-          // Threshold bars at the start of the strip: eight white bars
-          // across the asphalt, so the runway's beginning reads clearly.
           if (z - RUNWAY.z0 < 60) {
             ctx.fillStyle = 'rgba(255,255,255,0.85)';
             const bars = 8;
@@ -1079,25 +795,6 @@ export function createRenderer(canvas, effects) {
               ctx.fillRect(bx0, topY, bw, bandH);
             }
           }
-          // Touchdown-zone bars: pairs of bold white bars either side
-          // of the centreline at 150 m intervals past the threshold,
-          // the 300 m pair fatter as the aiming point — the markings
-          // that make the near strip read as a runway, not a grey road.
-          // A pair lands in exactly one band (zm is the centre of its
-          // 25 m slice), so it draws at that band's full height.
-          // The window is ±13, not ±12: band centres are 25 m apart,
-          // so a marking can sit 12.5 m from the nearest two — with
-          // ±12 it drew in NO band at all (the aiming point was
-          // missing from the first land shot), and with ±13 it draws
-          // in one band, or two when it lands exactly between them
-          // (a slightly longer bar, which still reads as a marking).
-          // Gated to d > 50 and clamped: at a few metres out the
-          // world-space width explodes (a 5 m bar is ~190 px wide at
-          // d = 12) and the pair under the nose becomes a giant white
-          // slab across the foreground — the first version did exactly
-          // that on the land shot. The 150 m pair is under the plane
-          // on short final anyway; the aiming point is the one that
-          // reads.
           if (d > 50) {
             for (const bar of [
               { z: RUNWAY.z0 + 150, w: 5, off: 8 },
@@ -1113,13 +810,9 @@ export function createRenderer(canvas, effects) {
               }
             }
           }
-          // Mown grass shoulder on the left of the strip, lighter than
-          // the surrounding field, so the airfield has a kept edge.
           const shoulderW = Math.max(2, (camDepth * 10) / d);
           ctx.fillStyle = mix3([126, 162, 100], SKY_HORIZON, haze * 0.7);
           ctx.fillRect(cx - half - shoulderW, topY, shoulderW, bandH);
-          // Taxiway beside the strip — cool grey like the asphalt, not
-          // the warm horizon mix (it read brown next to the strip).
           const taxiW = Math.max(2, (camDepth * 12) / d);
           ctx.fillStyle = mix3([70, 70, 78], [130, 138, 150], haze * 0.25);
           ctx.fillRect(cx + half, topY, taxiW, bandH);
@@ -1134,16 +827,11 @@ export function createRenderer(canvas, effects) {
       }
       prevY = y;
     }
-    // Low-altitude frames (the win screen at touchdown): the bands
-    // collapse to the horizon and the lower frame is left as sky
-    // gradient - a dead grey wash. Extend the nearest band's own colour
-    // to the bottom edge, so the ground under the camera is ground.
     if (lastBandBottom < h) {
       ctx.fillStyle = lastBandFill;
       ctx.fillRect(-40, lastBandBottom, w + 80, h - lastBandBottom);
     }
 
-    // Objects, far to near: zones, trees, houses, rings, falling crates.
     const drawables = [];
     for (const zn of world.course.zones) {
       const d = zn.z - camZ;
@@ -1166,7 +854,6 @@ export function createRenderer(canvas, effects) {
       if (d > 20 && d < VIEW_DIST) drawables.push({ d, kind: 'hangar', o: world.hangar });
     }
     {
-      // Approach light bar just before the strip: a row of white lights.
       const d = 5975 - camZ;
       if (d > 20 && d < VIEW_DIST) drawables.push({ d, kind: 'appr', o: { z: 5975 } });
     }
@@ -1174,8 +861,6 @@ export function createRenderer(canvas, effects) {
       const d = r.z - camZ;
       if (d > 10 && d < VIEW_DIST) drawables.push({ d, kind: 'ring', o: r });
     }
-    // Sky crates float off the ring line in mission 1 — a detour worth
-    // taking. Taken ones stay in the list briefly for their burst.
     for (const c of world.course.skyCrates) {
       const d = c.z - camZ;
       if (d > 10 && d < VIEW_DIST) drawables.push({ d, kind: 'skycrate', o: c });
@@ -1184,8 +869,6 @@ export function createRenderer(canvas, effects) {
       const d = c.z - camZ;
       if (d > -10 && d < VIEW_DIST) drawables.push({ d, kind: 'crate', o: c });
     }
-    // The balloon drifts over the valley (mission 1 airspace), and the
-    // bird flock crosses the track — both seeded, both alive in the frame.
     {
       const bp = world.balloonAt(state.time);
       const d = bp.z - camZ;
@@ -1195,7 +878,6 @@ export function createRenderer(canvas, effects) {
       const d = b.z - camZ;
       if (d > 20 && d < VIEW_DIST) drawables.push({ d, kind: 'bird', o: b });
     }
-    // The wingman joins the formation through the ring run.
     if (state.mission === 1) {
       const wm = wingmanAt(state);
       if (wm) drawables.push({ d: wm.d, kind: 'wingman', o: wm });
@@ -1209,15 +891,8 @@ export function createRenderer(canvas, effects) {
         const gy = horizonY + (camDepth * (camAlt - world.groundAt(zn.z))) / d;
         const rx = (camDepth * zn.r) / d;
         const ry = Math.max(2, rx * 0.16);
-        // Unhit zones get a vertical light beam, so the target reads
-        // from far away instead of being a faint ellipse on the ground.
         if (!zn.hit) {
           const beamTop = Math.max(horizonY - 180, horizonY + (camDepth * (camAlt - (world.groundAt(zn.z) + 150))) / d);
-          // Wider and brighter: at 200+ m the old 16 px beam was a faint
-          // thread, and the drop shot's target read as a small smudge.
-          // The beam tapers toward the top: the old constant-width rect
-          // read as a solid yellow pillar in the drop shot, not a shaft
-          // of light.
           const bw = Math.min(26, Math.max(3, rx * 0.28));
           const bg2 = ctx.createLinearGradient(0, gy, 0, beamTop);
           bg2.addColorStop(0, `rgba(255,190,60,${0.55 + 0.2 * Math.sin(state.time * 4)})`);
@@ -1250,16 +925,9 @@ export function createRenderer(canvas, effects) {
         if (d < 30) continue; // too close to read as a tree — it is beside the camera
         const sx = w / 2 + (camDepth * (t.x - camX)) / d;
         const gy = horizonY + (camDepth * (camAlt - world.groundAt(t.z))) / d;
-        // Cap the DRAWN size, not the scale factor: the round canopy
-        // spans 1.7×s and a conifer crown 1.6×s, so the round-5 cap of
-        // 64 still let a foreground round tree bloom into a ~110 px
-        // green disc (the drop shot's foreground lollipops). At s ≤ 40
-        // a round canopy is ≤ 68 px across and a pine crown ≤ 64 px —
-        // a tree, not a disc.
         let s = (camDepth * 9 * t.s) / d;
         s = Math.min(s, 40);
         if (s < 2 || sx < -20 || sx > w + 20) continue;
-        // Soft ground shadow so the tree sits on the field, not on top of it.
         ctx.fillStyle = 'rgba(0,0,0,0.16)';
         ctx.beginPath();
         ctx.ellipse(sx, gy, s * 0.55, s * 0.14, 0, 0, Math.PI * 2);
@@ -1269,13 +937,6 @@ export function createRenderer(canvas, effects) {
           : [['#2c5a2e', '#356b33', '#3f7a3a'], ['#27512b', '#2f6030', '#3a7038']];
         const g = greens[Math.floor(hash(Math.floor(t.z) * 7 + Math.floor(t.x)) * greens.length)];
         if (t.round) {
-          // Round-canopy tree: a squashed main crown plus two offset
-          // side crowns over a thicker trunk, so it reads as a leafy
-          // volume instead of a green lollipop on a stick — the old
-          // perfect circle plus thin trunk read as a balloon in the
-          // drop shot's foreground, and the second crown sat mostly
-          // hidden behind the main disc. A darker shade under the
-          // crown gives it a lit top and a shadowed base.
           ctx.fillStyle = g[0];
           ctx.beginPath();
           ctx.ellipse(sx, gy - s * 1.45, s * 0.85, s * 0.72, 0, 0, Math.PI * 2);
@@ -1294,8 +955,6 @@ export function createRenderer(canvas, effects) {
           ctx.fillStyle = '#5a3a22';
           ctx.fillRect(sx - s * 0.12, gy - s * 0.75, s * 0.24, s * 0.75);
         } else {
-          // Layered conifer: three stacked tiers, lightest at the top,
-          // so a big near pine reads as a pine instead of a flat triangle.
           ctx.fillStyle = g[0];
           ctx.beginPath();
           ctx.moveTo(sx, gy - s * 2.4);
@@ -1344,8 +1003,6 @@ export function createRenderer(canvas, effects) {
         const gy = horizonY + (camDepth * (camAlt - world.groundAt(o.z))) / d;
         const s = (camDepth * 8) / d;
         if (s < 2 || sx < -30 || sx > w + 30) continue;
-        // Windsock: pole with an orange cone streaming downwind (left,
-        // the crosswind blows from the right).
         ctx.strokeStyle = '#d8d8d8';
         ctx.lineWidth = Math.max(1, s * 0.08);
         ctx.beginPath();
@@ -1389,14 +1046,8 @@ export function createRenderer(canvas, effects) {
         const sy = horizonY + (camDepth * (camAlt - r.alt)) / d;
         const rr = (camDepth * r.r) / d;
         if (rr < 3 || sx < -rr || sx > w + rr) continue;
-        // Far rings fade: the next-next ring should read as depth
-        // behind the one you are flying at, not as a second ring
-        // pasted concentrically on top of it (the play shot's
-        // near-concentric pair).
         ctx.save();
         ctx.globalAlpha = d > 320 ? 0.55 : 1;
-        // Golden rings read gold, not yellow, and they sparkle — the
-        // player should spot the 250-pointer a long way off.
         const col = r.hit ? '#50ff8c' : r.passed ? 'rgba(255,90,78,0.55)' : r.golden ? '#ffb020' : '#ffc93c';
         ctx.lineWidth = Math.max(2, rr * 0.14);
         ctx.strokeStyle = col;
@@ -1409,7 +1060,6 @@ export function createRenderer(canvas, effects) {
         ctx.ellipse(sx, sy, rr * 0.86, rr * 0.8, 0, 0, Math.PI * 2);
         ctx.stroke();
         if (r.golden && !r.hit && !r.passed) {
-          // Twinkling four-point sparkles around the golden ring.
           ctx.fillStyle = `rgba(255,230,150,${0.5 + 0.4 * Math.sin(state.time * 5 + r.z)})`;
           for (let k = 0; k < 4; k += 1) {
             const a = (k * Math.PI) / 2 + state.time * 0.4;
@@ -1429,8 +1079,6 @@ export function createRenderer(canvas, effects) {
             ctx.fill();
           }
         }
-        // Hit burst: for a moment after threading a ring, an expanding
-        // golden ripple and sparkles bloom off it — the payoff you feel.
         if (r.hit && r.hitT >= 0) {
           const bt = (state.time - r.hitT) / 0.8;
           if (bt < 1) {
@@ -1451,7 +1099,6 @@ export function createRenderer(canvas, effects) {
             }
           }
         }
-        // Strut down to the ground so the ring's height reads.
         const gy = horizonY + (camDepth * (camAlt - world.groundAt(r.z))) / d;
         ctx.strokeStyle = 'rgba(255,255,255,0.25)';
         ctx.lineWidth = 1;
@@ -1466,7 +1113,6 @@ export function createRenderer(canvas, effects) {
         const sy = horizonY + (camDepth * (camAlt - bp.alt)) / d;
         const s = (camDepth * 16) / d;
         if (s < 3 || sx < -80 || sx > w + 80) continue;
-        // Striped envelope, ropes, and a little basket underneath.
         ctx.fillStyle = '#d84a35';
         ctx.beginPath();
         ctx.ellipse(sx, sy, s, s * 1.15, 0, 0, Math.PI * 2);
@@ -1502,7 +1148,6 @@ export function createRenderer(canvas, effects) {
         const sy = horizonY + (camDepth * (camAlt - b.alt)) / d;
         const s = Math.max(2, (camDepth * 3.5) / d);
         if (sx < -20 || sx > w + 20 || sy < 0 || sy > horizonY) continue;
-        // A flapping V: two wings that beat as the bird crosses the sky.
         const flap = b.flap * s * 0.5;
         ctx.strokeStyle = 'rgba(40,40,48,0.85)';
         ctx.lineWidth = Math.max(1, s * 0.12);
@@ -1512,8 +1157,6 @@ export function createRenderer(canvas, effects) {
         ctx.lineTo(sx + s, sy - flap);
         ctx.stroke();
       } else if (item.kind === 'wingman') {
-        // A little sister ship in formation: red wings, cream fuselage,
-        // seen from behind, with a short contrail of her own.
         const wm = item.o;
         const sx = w / 2 + (camDepth * (wm.x - camX)) / d;
         const sy = horizonY + (camDepth * (camAlt - wm.alt)) / d;
@@ -1522,10 +1165,6 @@ export function createRenderer(canvas, effects) {
         ctx.globalAlpha = wm.alpha;
         ctx.translate(sx, sy);
         ctx.rotate(wm.roll);
-        // Bigger again: at 0.50 she still read as a small tilted red
-        // cross in the play shot, not a plane in formation. The dark
-        // outline and the steady wingtip lights are the same treatment
-        // as the hero's, so the two ships read as a pair.
         const ws = 0.62 * (Math.min(w, h) / 720);
         ctx.scale(ws, ws);
         ctx.strokeStyle = 'rgba(28,20,18,0.55)';
@@ -1564,7 +1203,6 @@ export function createRenderer(canvas, effects) {
         ctx.beginPath();
         ctx.ellipse(0, -56, 19, 4.5, 0, 0, Math.PI * 2);
         ctx.fill();
-        // Her nav lights, steady on like the hero's.
         for (const [lx, col] of [[-124, '255,68,68'], [124, '68,255,119']]) {
           ctx.fillStyle = `rgba(${col},0.3)`;
           ctx.beginPath(); ctx.arc(lx, 12, 12, 0, Math.PI * 2); ctx.fill();
@@ -1572,7 +1210,6 @@ export function createRenderer(canvas, effects) {
           ctx.beginPath(); ctx.arc(lx, 12, 4.5, 0, Math.PI * 2); ctx.fill();
         }
         ctx.restore();
-        // Her contrail: a short fading streak trailing behind her.
         const g3 = ctx.createLinearGradient(sx, sy + 8, sx - 40, sy + 60);
         g3.addColorStop(0, `rgba(255,255,255,${0.3 * wm.alpha})`);
         g3.addColorStop(1, 'rgba(255,255,255,0)');
@@ -1585,13 +1222,10 @@ export function createRenderer(canvas, effects) {
       } else if (item.kind === 'skycrate') {
         const c = item.o;
         const sx = w / 2 + (camDepth * (c.x - camX)) / d;
-        // A gentle bob, deterministic in time, so the crate reads as
-        // floating rather than nailed to the sky.
         const sy = horizonY + (camDepth * (camAlt - c.alt)) / d + Math.sin(state.time * 1.2 + c.z) * 2;
         const s = Math.max(3, (camDepth * 2.6) / d);
         if (sx < -80 || sx > w + 80 || sy < -60 || sy > h + 40) continue;
         if (!c.taken) {
-          // A little parachute canopy over a wooden supply crate.
           ctx.fillStyle = '#e8e4da';
           ctx.beginPath();
           ctx.arc(sx, sy - s * 1.6, s * 1.5, Math.PI, 0);
@@ -1617,9 +1251,6 @@ export function createRenderer(canvas, effects) {
           ctx.strokeRect(sx - s, sy - s, s * 2, s * 2);
           ctx.fillStyle = 'rgba(255,255,255,0.85)';
           ctx.fillRect(sx - s * 0.2, sy - s, s * 0.4, s * 2);
-          // The label shows out to ~300 m (s > 4): at the play-shot stop
-          // the next crate sits 220–250 m ahead, and the old threshold
-          // (s > 9, ~115 m) meant no crate ever read in the cover shot.
           if (s > 4) {
             ctx.fillStyle = '#ffd166';
             ctx.font = `bold ${Math.max(11, Math.min(18, s * 0.5))}px ui-monospace, monospace`;
@@ -1628,7 +1259,6 @@ export function createRenderer(canvas, effects) {
             ctx.textAlign = 'left';
           }
         } else if (c.hitT >= 0) {
-          // Collect burst: a golden ripple where the crate was.
           const bt = (state.time - c.hitT) / 0.8;
           if (bt < 1) {
             ctx.strokeStyle = `rgba(255,210,90,${0.85 * (1 - bt)})`;
@@ -1647,9 +1277,6 @@ export function createRenderer(canvas, effects) {
         }
       } else if (item.kind === 'crate') {
         const c = item.o;
-        // A crate falls just ahead of the camera: clamp its projection
-        // distance so it stays on screen below the nose instead of
-        // blowing up as its distance goes to zero.
         const pd = Math.max(d, 60);
         const sx = w / 2 + (camDepth * (c.x - camX)) / pd;
         const sy = horizonY + (camDepth * (camAlt - c.alt)) / pd;
@@ -1667,11 +1294,6 @@ export function createRenderer(canvas, effects) {
     if (effects) effects.drawCloudVolume(ctx, { w, h, horizonY, camDepth, camX, camZ }, state, world);
     ctx.restore();
 
-    // Win screen: the runway, seen standing on it. At touchdown
-    // altitude the ground bands collapse to the horizon and the lower
-    // frame is a flat wash - the strip just landed on doesn't read at
-    // all. A converging asphalt wedge with edge lines and a centreline,
-    // apex at the horizon, puts the runway back under the winning plane.
     if (screen === SCREEN_WIN) {
       const apexY = horizonY;
       const topHalf = 18;
@@ -1696,8 +1318,6 @@ export function createRenderer(canvas, effects) {
       ctx.setLineDash([26, 30]);
       ctx.lineWidth = 5;
       ctx.beginPath();
-      // Dashes start below the end panel (bottom 406): the stretch
-      // behind it only ghosted through as a white line over the score.
       ctx.moveTo(w / 2, 412);
       ctx.lineTo(w / 2, h);
       ctx.stroke();
@@ -1705,7 +1325,6 @@ export function createRenderer(canvas, effects) {
     }
     drawPlaneShadow(w, h, state, world, screen, camDepth, horizonY);
 
-    // Speed streaks at the edges when fast.
     if (state.speed > 85 && screen === SCREEN_PLAY) {
       ctx.strokeStyle = 'rgba(255,255,255,0.28)';
       ctx.lineWidth = 1;
@@ -1721,7 +1340,6 @@ export function createRenderer(canvas, effects) {
     }
 
     drawPlane(w, h, state, state.time, screen);
-    // Contrails streaming off the wingtips at speed.
     if (state.speed > 90 && screen === SCREEN_PLAY) {
       const scale = (Math.min(w, h) / 720) * 1.22;
       const cx = w / 2;
@@ -1743,9 +1361,6 @@ export function createRenderer(canvas, effects) {
     if (effects) effects.draw(ctx, { w, h, horizonY, camDepth, camX, camAlt, camZ, pitch: state.pitch, screen, dusk }, state, world);
     drawHud(w, h, state, world, screen);
 
-    // Fireworks over the field when she greases it in: seeded bursts
-    // that bloom and fade on a loop, behind the win panel. A greased
-    // landing deserves a little sky of its own.
     if (screen === SCREEN_WIN && state.greased) {
       const cols = ['#ffd166', '#ff5a4e', '#7dd7ff', '#7dffa8'];
       for (let i = 0; i < 4; i += 1) {
@@ -1770,7 +1385,6 @@ export function createRenderer(canvas, effects) {
       }
     }
 
-    // Enhanced win-screen fireworks (effects.js), behind the win panel.
     if (screen === SCREEN_WIN && effects) effects.drawFireworks(ctx, w, h, animT);
 
     if (screen === SCREEN_TITLE) {
