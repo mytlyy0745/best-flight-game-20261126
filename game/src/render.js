@@ -308,12 +308,28 @@ export function createRenderer(canvas, effects) {
   }
 
   function panel(x, y, w, h) {
-    ctx.fillStyle = 'rgba(8,18,30,0.66)';
+    ctx.fillStyle = 'rgba(8,18,30,0.72)';
     ctx.fillRect(x, y, w, h);
     ctx.strokeStyle = 'rgba(120,220,255,0.5)';
     ctx.lineWidth = 1;
     ctx.strokeRect(x + 0.5, y + 0.5, w, h);
     ctx.fillStyle = '#bfefff';
+  }
+
+  // In-world floating tag: coloured text on its own dark chip so it stays
+  // readable over bright sky, gold rings and pale ground. (x, y) is the
+  // text baseline centre, same anchor the old bare fillText used.
+  function worldTag(text, x, y, px, color) {
+    ctx.save();
+    ctx.font = `bold ${px}px ui-monospace, monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    const tw = ctx.measureText(text).width;
+    ctx.fillStyle = 'rgba(8,18,30,0.68)';
+    ctx.fillRect(x - tw / 2 - 6, y - px - 4, tw + 12, px + 8);
+    ctx.fillStyle = color;
+    ctx.fillText(text, x, y);
+    ctx.restore();
   }
 
   function drawHud(w, h, state, world, screen) {
@@ -324,59 +340,75 @@ export function createRenderer(canvas, effects) {
     ctx.save();
     ctx.shadowColor = 'rgba(120,220,255,0.9)';
     ctx.shadowBlur = 8;
-    ctx.fillStyle = '#bfefff';
-    ctx.font = 'bold 17px ui-monospace, Menlo, monospace';
+    ctx.font = 'bold 18px ui-monospace, Menlo, monospace';
     ctx.textBaseline = 'top';
     if (screen !== SCREEN_TITLE) {
-    panel(14, 14, 214, 122);
-    ctx.fillText(`ALT  ${String(ft).padStart(5, ' ')} FT`, 24, 24);
-    ctx.fillText(`SPD  ${String(kts).padStart(5, ' ')} KT`, 24, 50);
-    ctx.fillText(`HDG  ${String(hdg).padStart(3, '0')}°`, 24, 76);
-    ctx.fillText(`VSI  ${vsFpm >= 0 ? '+' : ''}${vsFpm} FPM`, 24, 102);
-    panel(w - 224, 14, 214, 122);
+    panel(14, 14, 214, 128);
+    const instRows = [
+      ['ALT', `${String(ft).padStart(4, ' ')} FT`],
+      ['SPD', `${String(kts).padStart(3, ' ')} KT`],
+      ['HDG', `${String(hdg).padStart(3, '0')}°`],
+      ['VSI', `${vsFpm >= 0 ? '+' : ''}${vsFpm} FPM`],
+    ];
+    for (let i = 0; i < instRows.length; i += 1) {
+      const ry = 24 + i * 27;
+      ctx.fillStyle = 'rgba(191,239,255,0.6)';
+      ctx.textAlign = 'left';
+      ctx.fillText(instRows[i][0], 24, ry);
+      ctx.fillStyle = '#eaf7ff';
+      ctx.textAlign = 'right';
+      ctx.fillText(instRows[i][1], 218, ry);
+    }
+    ctx.textAlign = 'left';
+    panel(w - 224, 14, 214, 128);
+    ctx.fillStyle = '#bfefff';
     ctx.fillText('FUEL', w - 214, 26);
     ctx.fillStyle = state.fuel > 25 ? '#7dffa8' : '#ff5a4e';
     ctx.fillRect(w - 214, 50, 190 * clamp(state.fuel / 100, 0, 1), 12);
     ctx.strokeStyle = 'rgba(191,239,255,0.5)';
     ctx.strokeRect(w - 214.5, 49.5, 190, 12);
     ctx.fillStyle = '#bfefff';
-    ctx.fillText('HULL', w - 214, 70);
+    ctx.fillText('HULL', w - 214, 72);
     ctx.fillStyle = state.damage < 50 ? '#7dffa8' : '#ff5a4e';
-    ctx.fillRect(w - 214, 92, 190 * clamp(1 - state.damage / 100, 0, 1), 12);
+    ctx.fillRect(w - 214, 94, 190 * clamp(1 - state.damage / 100, 0, 1), 12);
     ctx.strokeStyle = 'rgba(191,239,255,0.5)';
-    ctx.strokeRect(w - 214.5, 91.5, 190, 12);
-    ctx.fillText(`THR ${Math.round(state.throttle * 100)}%`, w - 214, 110);
+    ctx.strokeRect(w - 214.5, 93.5, 190, 12);
+    ctx.fillStyle = 'rgba(191,239,255,0.6)';
+    ctx.fillText('THR', w - 214, 114);
+    ctx.fillStyle = '#eaf7ff';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${Math.round(state.throttle * 100)}%`, w - 24, 114);
+    ctx.textAlign = 'left';
     }
     const mission = world.state.mission;
     let objective = '';
     if (mission === 1) objective = `RINGS ${world.state.ringsHit}/${RING_COUNT}`;
     else if (mission === 2) objective = `DROPS ${world.state.zonesHit}/5   CRATES ${world.state.crates}`;
     else objective = `LAND ON THE RUNWAY`;
-    panel(w / 2 - 250, 8, 500, 96);
+    panel(w / 2 - 260, 8, 520, 90);
     ctx.textAlign = 'center';
-    ctx.font = 'bold 19px ui-monospace, Menlo, monospace';
-    ctx.fillText(`MISSION ${mission} — ${objective}`, w / 2, 22);
-    ctx.font = 'bold 32px ui-monospace, Menlo, monospace';
-    ctx.fillText(String(world.state.score), w / 2, 48);
-    ctx.font = '13px ui-monospace, Menlo, monospace';
-    ctx.fillStyle = 'rgba(191,239,255,0.75)';
-    ctx.fillText('SCORE', w / 2, 82);
+    ctx.fillStyle = '#bfefff';
+    ctx.font = 'bold 20px ui-monospace, Menlo, monospace';
+    ctx.fillText(`MISSION ${mission} — ${objective}`, w / 2, 20);
+    ctx.font = 'bold 38px ui-monospace, Menlo, monospace';
+    ctx.fillStyle = '#eaf7ff';
+    ctx.fillText(String(world.state.score), w / 2, 46);
     ctx.textAlign = 'left';
     const combo = mission === 1 ? world.state.streak : mission === 2 ? world.state.zoneStreak : 0;
     if (combo >= 2) {
       const ccol = combo >= 6 ? '#ff9a3c' : combo >= 4 ? '#ffd166' : '#ffe9a8';
       ctx.textAlign = 'center';
-      ctx.font = 'bold 16px ui-monospace, Menlo, monospace';
+      ctx.font = 'bold 18px ui-monospace, Menlo, monospace';
       const clabel = combo >= 6 ? `COMBO x${combo} — ON FIRE` : `COMBO x${combo}`;
       const ctw = ctx.measureText(clabel).width;
       if (combo >= 6) {
         ctx.shadowColor = '#ffd166';
         ctx.shadowBlur = 14;
       }
-      ctx.fillStyle = 'rgba(8,18,30,0.6)';
-      ctx.fillRect(w / 2 - ctw / 2 - 10, 108, ctw + 20, 22);
+      ctx.fillStyle = 'rgba(8,18,30,0.68)';
+      ctx.fillRect(w / 2 - ctw / 2 - 10, 104, ctw + 20, 24);
       ctx.fillStyle = ccol;
-      ctx.fillText(clabel, w / 2, 113);
+      ctx.fillText(clabel, w / 2, 109);
       ctx.shadowBlur = 0;
       ctx.textAlign = 'left';
     }
@@ -385,39 +417,37 @@ export function createRenderer(canvas, effects) {
       const strong = Math.abs(g) >= GUST_STRONG;
       const arrow = g > 0.5 ? '→' : g < -0.5 ? '←' : '·';
       const wlabel = strong ? `GUST! ${arrow} ${Math.abs(Math.round(g))}` : `WIND ${arrow} ${Math.abs(Math.round(g))}`;
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 15px ui-monospace, Menlo, monospace';
-      const wtw = ctx.measureText(wlabel).width;
-      ctx.fillStyle = 'rgba(8,18,30,0.6)';
-      ctx.fillRect(w / 2 - wtw / 2 - 10, 136, wtw + 20, 22);
-      ctx.fillStyle = strong ? '#ff9a3c' : 'rgba(191,239,255,0.85)';
-      ctx.fillText(wlabel, w / 2, 141);
       ctx.textAlign = 'left';
+      ctx.font = 'bold 16px ui-monospace, Menlo, monospace';
+      const wtw = ctx.measureText(wlabel).width;
+      ctx.fillStyle = 'rgba(8,18,30,0.68)';
+      ctx.fillRect(w - 14 - wtw - 16, 148, wtw + 16, 24);
+      ctx.fillStyle = strong ? '#ff9a3c' : 'rgba(191,239,255,0.85)';
+      ctx.fillText(wlabel, w - 14 - wtw - 8, 153);
     }
     if (mission === 2 && screen === SCREEN_PLAY) {
       const dw = world.state.dropWind;
       const dstrong = Math.abs(dw) >= 5;
       const darrow = dw > 0.5 ? '→' : dw < -0.5 ? '←' : '·';
       const dlabel = dstrong ? `DROP WIND! ${darrow} ${Math.abs(Math.round(dw))}` : `DROP WIND ${darrow} ${Math.abs(Math.round(dw))}`;
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 15px ui-monospace, Menlo, monospace';
-      const dtw = ctx.measureText(dlabel).width;
-      ctx.fillStyle = 'rgba(8,18,30,0.6)';
-      ctx.fillRect(w / 2 - dtw / 2 - 10, 136, dtw + 20, 22);
-      ctx.fillStyle = dstrong ? '#ff9a3c' : 'rgba(191,239,255,0.85)';
-      ctx.fillText(dlabel, w / 2, 141);
       ctx.textAlign = 'left';
+      ctx.font = 'bold 16px ui-monospace, Menlo, monospace';
+      const dtw = ctx.measureText(dlabel).width;
+      ctx.fillStyle = 'rgba(8,18,30,0.68)';
+      ctx.fillRect(w - 14 - dtw - 16, 148, dtw + 16, 24);
+      ctx.fillStyle = dstrong ? '#ff9a3c' : 'rgba(191,239,255,0.85)';
+      ctx.fillText(dlabel, w - 14 - dtw - 8, 153);
     }
     if (screen !== SCREEN_TITLE) {
     const cw = 360;
     const cx0 = w / 2 - cw / 2;
     panel(cx0 - 10, h - 50, cw + 20, 36);
     ctx.fillStyle = '#bfefff';
-    ctx.font = '14px ui-monospace, Menlo, monospace';
+    ctx.font = '15px ui-monospace, Menlo, monospace';
     ctx.textAlign = 'center';
-    for (let d = -60; d <= 60; d += 15) {
+    for (let d = -60; d <= 60; d += 30) {
       const deg = Math.round(((hdg + d) % 360 + 360) % 360);
-      const x = w / 2 + d * 3;
+      const x = w / 2 + d * 2.5;
       ctx.fillText(deg === 0 ? 'N' : deg === 90 ? 'E' : deg === 180 ? 'S' : deg === 270 ? 'W' : String(deg), x, h - 43);
       ctx.fillRect(x - 0.5, h - 26, 1, 6);
     }
@@ -441,32 +471,32 @@ export function createRenderer(canvas, effects) {
       const dist = Math.max(0, Math.round(target.z - state.z));
       const label = mission === 1 ? `NEXT RING ${dist} m` : `NEXT ZONE ${dist} m`;
       ctx.textAlign = 'left';
-      ctx.font = 'bold 15px ui-monospace, Menlo, monospace';
+      ctx.font = 'bold 17px ui-monospace, Menlo, monospace';
       const tw = ctx.measureText(label).width;
-      ctx.fillStyle = 'rgba(8,18,30,0.6)';
-      ctx.fillRect(14, 148, tw + 16, 22);
+      ctx.fillStyle = 'rgba(8,18,30,0.68)';
+      ctx.fillRect(14, 148, tw + 16, 26);
       ctx.fillStyle = '#ffd166';
-      ctx.fillText(label, 22, 152);
+      ctx.fillText(label, 22, 154);
       ctx.textAlign = 'left';
     }
     if (mission === 3 && !state.landed && screen !== SCREEN_TITLE) {
       const dist = Math.max(0, Math.round(RUNWAY.z0 - state.z));
-      const label3 = state.z < RUNWAY.z0 ? `RUNWAY ${dist} m — SLOW DOWN, FLARE GENTLY` : 'ON THE STRIP — HOLD HER LEVEL';
+      const label3 = state.z < RUNWAY.z0 ? `RUNWAY ${dist} m — SLOW & FLARE` : 'ON THE STRIP — HOLD LEVEL';
       ctx.textAlign = 'left';
-      ctx.font = 'bold 15px ui-monospace, Menlo, monospace';
+      ctx.font = 'bold 17px ui-monospace, Menlo, monospace';
       const tw3 = ctx.measureText(label3).width;
-      ctx.fillStyle = 'rgba(8,18,30,0.6)';
-      ctx.fillRect(14, 148, tw3 + 16, 22);
+      ctx.fillStyle = 'rgba(8,18,30,0.68)';
+      ctx.fillRect(14, 148, tw3 + 16, 26);
       ctx.fillStyle = '#ffd166';
-      ctx.fillText(label3, 22, 152);
+      ctx.fillText(label3, 22, 154);
       ctx.textAlign = 'left';
     }
     if (state.messageT > 0 && state.message && screen !== SCREEN_WIN) {
       ctx.textAlign = 'center';
-      ctx.font = 'bold 25px ui-monospace, Menlo, monospace';
+      ctx.font = 'bold 27px ui-monospace, Menlo, monospace';
       const mtw = ctx.measureText(state.message).width;
-      ctx.fillStyle = 'rgba(8,18,30,0.6)';
-      ctx.fillRect(w / 2 - mtw / 2 - 12, h * 0.24 - 6, mtw + 24, 34);
+      ctx.fillStyle = 'rgba(8,18,30,0.68)';
+      ctx.fillRect(w / 2 - mtw / 2 - 12, h * 0.24 - 8, mtw + 24, 38);
       ctx.fillStyle = '#ffd166';
       ctx.fillText(state.message, w / 2, h * 0.24);
       ctx.textAlign = 'left';
@@ -474,12 +504,12 @@ export function createRenderer(canvas, effects) {
     ctx.restore();
   }
 
-  function overlay(w, h, lines, accent, dy = 0, titleSize = 30, bodySize = 15, bigIdx = -1, panelW = 640, panelAlpha = 0.76) {
+  function overlay(w, h, lines, accent, dy = 0, titleSize = 30, bodySize = 16, bigIdx = -1, panelW = 640, panelAlpha = 0.76) {
     ctx.save();
     ctx.fillStyle = 'rgba(6,12,22,0.26)';
     ctx.fillRect(0, 0, w, h);
     const bw = Math.min(panelW, w - 60);
-    const bodyH = (i) => (i === bigIdx ? 34 : 28);
+    const bodyH = (i) => (i === bigIdx ? 36 : 30);
     let bh = 18 + titleSize + 12;
     for (let i = 1; i < lines.length; i += 1) bh += bodyH(i);
     bh += 16;
@@ -505,6 +535,9 @@ export function createRenderer(canvas, effects) {
       if (i === bigIdx) {
         ctx.font = 'bold 22px ui-monospace, Menlo, monospace';
         ctx.fillStyle = '#ffd166';
+      } else if (i === lines.length - 1 && lines.length > 2) {
+        ctx.font = '14px ui-monospace, Menlo, monospace';
+        ctx.fillStyle = 'rgba(232,244,255,0.62)';
       } else {
         ctx.font = `${bodySize}px ui-monospace, Menlo, monospace`;
         ctx.fillStyle = '#e8f4ff';
@@ -914,11 +947,7 @@ export function createRenderer(canvas, effects) {
         ctx.lineWidth = 3;
         ctx.stroke();
         if (zn.hit) {
-          ctx.fillStyle = '#50ff8c';
-          ctx.font = `bold ${Math.max(11, Math.min(22, rx * 0.5))}px ui-monospace, monospace`;
-          ctx.textAlign = 'center';
-          ctx.fillText('SUPPLIED ✓', sx, gy - ry - 8);
-          ctx.textAlign = 'left';
+          worldTag('SUPPLIED ✓', sx, gy - ry - 8, Math.max(13, Math.min(22, rx * 0.5)), '#50ff8c');
         }
       } else if (item.kind === 'tree') {
         const t = item.o;
@@ -1136,11 +1165,7 @@ export function createRenderer(canvas, effects) {
         ctx.fillStyle = '#6b4a1a';
         ctx.fillRect(sx - s * 0.3, sy + s * 1.5, s * 0.6, s * 0.45);
         if (!state.balloonBuzzed) {
-          ctx.fillStyle = '#ffd166';
-          ctx.font = `bold ${Math.max(11, Math.min(18, s * 0.5))}px ui-monospace, monospace`;
-          ctx.textAlign = 'center';
-          ctx.fillText('BUZZ ME +150', sx, sy - s * 1.45);
-          ctx.textAlign = 'left';
+          worldTag('BUZZ ME +150', sx, sy - s * 1.45, Math.max(13, Math.min(18, s * 0.5)), '#ffd166');
         }
       } else if (item.kind === 'bird') {
         const b = item.o;
@@ -1252,11 +1277,7 @@ export function createRenderer(canvas, effects) {
           ctx.fillStyle = 'rgba(255,255,255,0.85)';
           ctx.fillRect(sx - s * 0.2, sy - s, s * 0.4, s * 2);
           if (s > 4) {
-            ctx.fillStyle = '#ffd166';
-            ctx.font = `bold ${Math.max(11, Math.min(18, s * 0.5))}px ui-monospace, monospace`;
-            ctx.textAlign = 'center';
-            ctx.fillText('GRAB +75', sx, sy - s * 3.4);
-            ctx.textAlign = 'left';
+            worldTag('GRAB +75', sx, sy - s * 3.4, Math.max(13, Math.min(18, s * 0.5)), '#ffd166');
           }
         } else if (c.hitT >= 0) {
           const bt = (state.time - c.hitT) / 0.8;
@@ -1395,7 +1416,7 @@ export function createRenderer(canvas, effects) {
         'Space — drop a crate    P — pause    M — mute',
         best > 0 ? `Best score: ${best}` : 'Fly the rings, grab the crates, drop the supplies, land her.',
         'Press Space or click to fly',
-      ], '#ffd166', -95, 40, 15, -1, 600, 0.94);
+      ], '#ffd166', -95, 40, 16, -1, 600, 0.94);
     } else if (screen === SCREEN_BRIEF) {
       const m = world.state.mission;
       const defs = [
@@ -1427,9 +1448,10 @@ export function createRenderer(canvas, effects) {
         'ALL MISSIONS COMPLETE',
         rating,
         `Final score: ${state.score}   (best ${Math.max(best, state.score)})`,
-        `Landing bonus: +${state.landScore}   Best combo: x${state.maxCombo}`,
+        `Landing bonus: +${state.landScore}`,
+        `Best combo: x${state.maxCombo}`,
         'Press Space to fly again',
-      ], '#ffd166', -70, 40, 16, 3, 640, 0.88);
+      ], '#ffd166', -70, 40, 17, 3, 640, 0.92);
     }
   }
 
