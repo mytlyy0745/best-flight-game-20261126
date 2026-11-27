@@ -1,4 +1,5 @@
 import { SEG_LEN, VIEW_DIST, RUNWAY, MISSION_Z, RING_COUNT, RATING_LEGEND, RATING_ACE, RATING_SKILLED, GUST_STRONG, WINGMAN_Z0, WINGMAN_Z1 } from './config.js';
+import { RUNWAY_MARKINGS, RUNWAY_LIGHTS } from './world.js';
 
 export const SCREEN_TITLE = 0;
 export const SCREEN_BRIEF = 1;
@@ -665,6 +666,21 @@ export function createRenderer(canvas, effects) {
     let prevY = horizonY;
     let lastBandFill = 'rgb(90,120,80)';
     let lastBandBottom = horizonY;
+    // R3: runway edge polylines — edge points are collected per band and
+    // stroked once after the loop, so the edges converge as smooth lines
+    // instead of stepped per-band segments. runwaySpan is the vertical
+    // span of the band-loop runway: ~0 when it is edge-on / hidden (the
+    // win screen has its own trapezoid), hundreds of px in the land frame.
+    const edgeL = [];
+    const edgeR = [];
+    let runwaySpan = 0;
+    let lastRunway = null;
+    // R3: centreline points for the smooth post-loop polyline — the
+    // true projected centreline is a straight diagonal, but per-band
+    // vertical segments staircased it (a 223 px jog at the nearest
+    // band). Points carry a move flag at each dash gap.
+    const centrePts = [];
+    let centreBreak = true;
     for (let i = segCount; i >= 0; i -= 1) {
       const d = Math.max(8, i * SEG_LEN);
       const z = camZ + d;
@@ -705,11 +721,17 @@ export function createRenderer(canvas, effects) {
         }
         lastBandFill = baseFill;
         lastBandBottom = Math.max(lastBandBottom, topY + bandH);
-        const bg = ctx.createLinearGradient(0, topY, 0, topY + bandH);
-        bg.addColorStop(0, 'rgba(255,255,255,0.03)');
-        bg.addColorStop(1, 'rgba(0,0,0,0.07)');
-        ctx.fillStyle = bg;
-        ctx.fillRect(-40, topY, w + 80, bandH);
+        // R3: skip the per-band light/dark overlay on the runway — it
+        // restarted every 25 m band and cut the strip into grey
+        // rectangles. The dusk depth ramp in the runway block below
+        // carries the shading instead, as one continuous gradient.
+        if (!onRunway) {
+          const bg = ctx.createLinearGradient(0, topY, 0, topY + bandH);
+          bg.addColorStop(0, 'rgba(255,255,255,0.03)');
+          bg.addColorStop(1, 'rgba(0,0,0,0.07)');
+          ctx.fillStyle = bg;
+          ctx.fillRect(-40, topY, w + 80, bandH);
+        }
         if (!onRunway && !crossRoad && bandH > 4) {
           const visH = Math.max(0, Math.min(bandH, h - topY));
           const furCount = Math.min(12, 3 + Math.floor(visH / 35));
@@ -865,10 +887,26 @@ export function createRenderer(canvas, effects) {
         if (onRunway) {
           const cx = w / 2 - (camDepth * camX) / d;
           const half = (camDepth * RUNWAY.halfWidth) / d;
-          const asphaltBase = dusk ? [102, 92, 86] : [88, 88, 96];
+          // R3: dusk depth ramp — warm sunlit asphalt near, cooler and
+          // darker far, so the strip reads as one surface receding
+          // instead of a flat slab. Daylight keeps the old flat base
+          // (the runway is never on screen in daylight frames).
+          const depthT = dusk ? clamp(d / 620, 0, 1) : 0;
+          const asphaltBase = dusk
+            ? [Math.round(lerp(130, 72, depthT)), Math.round(lerp(110, 66, depthT)), Math.round(lerp(94, 72, depthT))]
+            : [88, 88, 96];
           const asphaltHaze = dusk ? [168, 152, 140] : [150, 158, 170];
-          ctx.fillStyle = mix3(asphaltBase, asphaltHaze, haze * 0.25);
+          const asphaltFill = mix3(asphaltBase, asphaltHaze, haze * 0.25);
+          ctx.fillStyle = asphaltFill;
           ctx.fillRect(cx - half, topY, half * 2, bandH);
+          // R3: the strip below the nearest band is runway too — fill it
+          // with asphalt, not the green field colour the old baseFill
+          // carried (it painted a grass strip across the bottom edge).
+          // Only when this band genuinely descends toward the camera
+          // (y well below the horizon): parked on the runway (win
+          // screen, alt 0) the band loop is edge-on and the strip below
+          // is distant ground, not runway surface.
+          if (y - horizonY > 40) lastBandFill = asphaltFill;
           if (bandH > 8) {
             const visH = Math.max(0, Math.min(bandH, h - topY));
             const stripL = Math.max(cx - half, -20);
@@ -877,67 +915,72 @@ export function createRenderer(canvas, effects) {
             for (let k = 0; k < 4; k += 1) {
               const sx = stripL + hash(i * 97 + k * 19) * stripW;
               const sw = Math.max(1.5, (camDepth * (0.8 + hash(i * 97 + k * 19 + 7) * 1.4)) / d);
-              ctx.fillStyle = `rgba(46,42,44,${(0.05 + hash(i * 97 + k * 19 + 11) * 0.05).toFixed(3)})`;
+              ctx.fillStyle = `rgba(46,42,44,${(0.07 + hash(i * 97 + k * 19 + 11) * 0.07).toFixed(3)})`;
               ctx.fillRect(sx - sw / 2, topY, sw, bandH);
             }
             for (let k = 0; k < 2; k += 1) {
               const sx = stripL + hash(i * 89 + k * 23 + 3) * stripW;
               const sw = Math.max(1.5, (camDepth * (1.2 + hash(i * 89 + k * 23 + 5) * 1.6)) / d);
-              ctx.fillStyle = `rgba(224,212,196,${(0.04 + hash(i * 89 + k * 23 + 9) * 0.03).toFixed(3)})`;
+              ctx.fillStyle = `rgba(224,212,196,${(0.05 + hash(i * 89 + k * 23 + 9) * 0.04).toFixed(3)})`;
               ctx.fillRect(sx - sw / 2, topY, sw, bandH);
             }
           }
           for (const side of [-1, 1]) {
             const tx = cx + side * ((camDepth * 6) / d);
-            const tw = Math.min(10, Math.max(1.5, (camDepth * 2.2) / d));
-            ctx.fillStyle = 'rgba(52,52,60,0.32)';
+            const tw = Math.min(14, Math.max(1.5, (camDepth * 2.2) / d));
+            ctx.fillStyle = 'rgba(52,52,60,0.28)';
             ctx.fillRect(tx - tw / 2, topY, tw, bandH);
           }
+          // R3: centreline — longer dash cycle (34 on / 26 off per
+          // 60 m), solid within 160 m. Points are collected for the
+          // smooth post-loop polyline instead of per-band vertical
+          // strokes (which staircased the near field).
           const zm = z - SEG_LEN / 2;
-          if ((((zm % 50) + 50) % 50) < 30 || d < 140) {
-            ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-            ctx.lineWidth = Math.min(5, Math.max(1, half * 0.08));
-            ctx.beginPath();
-            ctx.moveTo(cx, y);
-            ctx.lineTo(cx, prevY);
-            ctx.stroke();
+          const dash = RUNWAY_MARKINGS.centreDash;
+          const dashOn = (((zm % dash.cycle) + dash.cycle) % dash.cycle) < dash.on || d < dash.solidWithin;
+          if (dashOn) {
+            if (centreBreak) {
+              centrePts.push({ x: cx, y: prevY, half, move: true });
+              centreBreak = false;
+            }
+            centrePts.push({ x: cx, y, half });
+          } else {
+            centreBreak = true;
           }
-          ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-          ctx.lineWidth = Math.min(3, Math.max(1, half * 0.06));
-          ctx.beginPath();
-          ctx.moveTo(cx - half, y);
-          ctx.lineTo(cx - half, prevY);
-          ctx.moveTo(cx + half, y);
-          ctx.lineTo(cx + half, prevY);
-          ctx.stroke();
-          if (d > 140) {
-            const jointY = topY + bandH / 2;
-            ctx.strokeStyle = 'rgba(40,40,48,0.3)';
-            ctx.lineWidth = Math.max(1, Math.min(3, half * 0.02));
-            ctx.beginPath();
-            ctx.moveTo(cx - half, jointY);
-            ctx.lineTo(cx + half, jointY);
-            ctx.stroke();
+          // R3: collect edge points for the smooth post-loop polylines
+          // (the old per-band edge strokes stepped at every band).
+          if (edgeL.length === 0) {
+            edgeL.push({ x: cx - half, y: prevY, half });
+            edgeR.push({ x: cx + half, y: prevY, half });
           }
-          if (z - RUNWAY.z0 < 60) {
-            ctx.fillStyle = 'rgba(255,255,255,0.85)';
-            const bars = 8;
-            for (let b = 0; b < bars; b += 1) {
-              const bx0 = cx - half + ((b + 0.15) / bars) * half * 2;
-              const bw = (half * 2 * 0.7) / bars;
+          edgeL.push({ x: cx - half, y, half });
+          edgeR.push({ x: cx + half, y, half });
+          runwaySpan = Math.max(runwaySpan, y - horizonY);
+          lastRunway = { cx, half, y };
+          // R3: the cross-runway joint seam is gone — it cut the strip
+          // into grey rectangles.
+          // Threshold block: narrow piano keys over a longer strip.
+          const th = RUNWAY_MARKINGS.threshold;
+          if (z >= th.z0 && z <= th.z1) {
+            ctx.fillStyle = 'rgba(255,255,255,0.8)';
+            for (let b = 0; b < th.bars; b += 1) {
+              const bx0 = cx - half + ((b + (1 - th.fill) / 2) / th.bars) * half * 2;
+              const bw = (half * 2 * th.fill) / th.bars;
               ctx.fillRect(bx0, topY, bw, bandH);
             }
           }
-          if (d > 15) {
-            for (const bar of [
-              { z: RUNWAY.z0 + 150, w: 7, off: 8 },
-              { z: RUNWAY.z0 + 300, w: 9, off: 9 },
-              { z: RUNWAY.z0 + 450, w: 7, off: 8 },
-            ]) {
-              if (Math.abs(zm - bar.z) <= 16) {
-                const bw = Math.min(24, Math.max(2, (camDepth * bar.w) / d));
-                const bo = Math.min(90, (camDepth * bar.off) / d);
-                ctx.fillStyle = 'rgba(255,255,255,0.9)';
+          // Touchdown (aiming-point) bars: narrow long strips at true
+          // perspective — no width/offset caps, so they taper with the
+          // runway instead of reading as square blocks. Bands nearer
+          // than 20 m are skipped so a strip never becomes a giant
+          // slab at the bottom edge.
+          if (d > 20) {
+            for (const bar of RUNWAY_MARKINGS.aiming) {
+              if (Math.abs(zm - bar.z) <= bar.halfWindow) {
+                const bw = Math.min(40, Math.max(2, (camDepth * bar.w) / d));
+                const bo = (camDepth * bar.off) / d;
+                if (cx + bo + bw < -20 || cx - bo - bw > w + 20) continue;
+                ctx.fillStyle = 'rgba(255,255,255,0.85)';
                 ctx.fillRect(cx - bo - bw, topY, bw, bandH);
                 ctx.fillRect(cx + bo, topY, bw, bandH);
               }
@@ -963,6 +1006,79 @@ export function createRenderer(canvas, effects) {
     if (lastBandBottom < h) {
       ctx.fillStyle = lastBandFill;
       ctx.fillRect(-40, lastBandBottom, w + 80, h - lastBandBottom);
+    }
+
+    // R3: runway finish — smooth tapered edges, centreline run to the
+    // bottom edge, warm threshold lights. Only when the band-loop runway
+    // is genuinely visible (land frame, span of hundreds of px): the win
+    // screen has its own trapezoid and its band runway is edge-on
+    // (span ~0), so none of this leaks into it.
+    if (runwaySpan > 40 && edgeL.length > 1 && edgeR.length > 1) {
+      if (lastRunway && camAlt > 0.5 && h > horizonY) {
+        const dB = (camDepth * camAlt) / (h - horizonY);
+        if (dB > 0 && dB < 40) {
+          const cxB = w / 2 - (camDepth * camX) / dB;
+          const halfB = (camDepth * RUNWAY.halfWidth) / dB;
+          edgeL.push({ x: cxB - halfB, y: h, half: halfB });
+          edgeR.push({ x: cxB + halfB, y: h, half: halfB });
+          // Centreline run to the bottom edge: same straight diagonal,
+          // so the last dash sweeps unbroken off the frame.
+          centrePts.push({ x: cxB, y: h, half: halfB });
+        }
+      }
+      // Smooth tapered centreline: one segment per band, width from
+      // that band's projected half-width — bold near, fine far. Dash
+      // gaps break the path (move points).
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.lineCap = 'round';
+      for (let s = 0; s < centrePts.length - 1; s += 1) {
+        const a = centrePts[s];
+        const b = centrePts[s + 1];
+        if (b.move) continue;
+        ctx.lineWidth = clamp(Math.max(2, b.half * 0.12), 2, 12);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+      // Tapered edge polylines: one segment per band, width from that
+      // band's projected half-width — wide near, hairline far.
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineCap = 'round';
+      for (const pts of [edgeL, edgeR]) {
+        for (let s = 0; s < pts.length - 1; s += 1) {
+          const a = pts[s];
+          const b = pts[s + 1];
+          ctx.lineWidth = clamp(Math.max(1, b.half * 0.10), 1, 8);
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
+      }
+      // Warm threshold lights (world data): entrance accents near the
+      // camera plus a closing row at the far end.
+      for (const light of [...RUNWAY_LIGHTS.near, ...RUNWAY_LIGHTS.far]) {
+        const d = light.z - camZ;
+        if (d < 12 || d > VIEW_DIST) continue;
+        const sx = w / 2 + (camDepth * (light.x - camX)) / d;
+        if (sx < -30 || sx > w + 30) continue;
+        const sy = horizonY + (camDepth * camAlt) / d;
+        if (sy < horizonY - 4 || sy > h + 10) continue;
+        const r = clamp((camDepth * 0.9) / d, 1.2, 7);
+        const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, r * 3.2);
+        glow.addColorStop(0, 'rgba(255,196,90,0.85)');
+        glow.addColorStop(0.35, 'rgba(255,180,70,0.35)');
+        glow.addColorStop(1, 'rgba(255,180,70,0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(sx, sy, r * 3.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,222,150,0.95)';
+        ctx.beginPath();
+        ctx.arc(sx, sy, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
     // Tags that must never be covered by a later-drawn plane: the balloon's
