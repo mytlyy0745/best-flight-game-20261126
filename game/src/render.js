@@ -624,6 +624,17 @@ export function createRenderer(canvas, effects) {
       rx = clamp((camDepth * 10) / d, 26, 85);
       alpha = clamp(0.55 - altAbove * 0.0022, 0.12, 0.5);
       alpha = Math.min(alpha, 0.13 + Math.max(0, altAbove - 60) * 0.002);
+      // R3 labels: at 550 FT (altAbove ~141 m) the airborne shadow was
+      // still ~0.5 effective — a dark oval on the field that read as a
+      // stain, not a shadow. Fade it out with height, the way a real
+      // shadow softens with distance, so the high play frame matches
+      // the soft grey-green land-frame ellipse. The fade is exactly 1
+      // at or below 60 m, so the land frame (altAbove ~6 m) and the
+      // drop frame (~53 m) are byte-identical; at 141 m it leaves
+      // ~0.08 nominal alpha and ~0.7x radius — a faint soft smudge.
+      const highFade = altAbove <= 60 ? 1 : clamp(1 - (altAbove - 60) / 120, 0.28, 1);
+      alpha *= highFade;
+      rx *= 0.55 + 0.45 * highFade;
       sx = w / 2 - clamp(altAbove * 0.35, 0, 90);
       layers = [[1.9, 0.1], [1.6, 0.2], [1.35, 0.32], [1.18, 0.46], [1.06, 0.65], [1, 1]];
     }
@@ -969,6 +980,13 @@ export function createRenderer(canvas, effects) {
     // BUZZ ME tag is collected here and painted after the whole drawable
     // loop (and the clouds), so the wingman's wing can no longer hide it.
     const pendingTags = [];
+    // R3 labels: the nearest untaken sky crate is the only one that
+    // carries a GRAB tag (see the skycrate branch below).
+    let nearestSkyCrateD = Infinity;
+    for (const c of world.course.skyCrates) {
+      const cd = c.z - camZ;
+      if (!c.taken && cd > 10 && cd < VIEW_DIST && cd < nearestSkyCrateD) nearestSkyCrateD = cd;
+    }
     const drawables = [];
     for (const zn of world.course.zones) {
       const d = zn.z - camZ;
@@ -1412,10 +1430,25 @@ export function createRenderer(canvas, effects) {
         ctx.stroke();
       } else if (item.kind === 'skycrate') {
         const c = item.o;
-        const sx = w / 2 + (camDepth * (c.x - camX)) / d;
+        let sx = w / 2 + (camDepth * (c.x - camX)) / d;
         const sy = horizonY + (camDepth * (camAlt - c.alt)) / d + Math.sin(state.time * 1.2 + c.z) * 2;
         const s = Math.max(3, (camDepth * 2.6) / d);
         if (sx < -80 || sx > w + 80 || sy < -60 || sy > h + 40) continue;
+        // R3 labels: the near crate sat on the hero's tail — its box
+        // overlapped the fuselage column and its canopy all but touched
+        // the tail fin. Nudge the whole crate drawing (box, canopy and
+        // tag move together) just far enough right to clear the
+        // fuselage, only when a readable-size crate would otherwise
+        // intersect it. Pure screen-space offset: world position, grab
+        // radius and score are untouched.
+        if (!c.taken && s > 10) {
+          const planeCy = h * 0.6 - state.pitch * 16;
+          const crateTop = sy - s * 3.1;
+          const crateBot = sy + s;
+          if (crateBot > planeCy - 105 && crateTop < planeCy + 45 && sx - s < w / 2 + 30 && sx + s > w / 2 - 30) {
+            sx += (w / 2 + 38) - (sx - s);
+          }
+        }
         if (!c.taken) {
           ctx.fillStyle = '#e8e4da';
           ctx.beginPath();
@@ -1442,8 +1475,14 @@ export function createRenderer(canvas, effects) {
           ctx.strokeRect(sx - s, sy - s, s * 2, s * 2);
           ctx.fillStyle = 'rgba(255,255,255,0.85)';
           ctx.fillRect(sx - s * 0.2, sy - s, s * 0.4, s * 2);
-          if (s > 4) {
-            worldTag('GRAB +75', sx, sy - s * 3.4, Math.max(13, Math.min(18, s * 0.5)), '#ffd166');
+          if (s > 4 && d === nearestSkyCrateD) {
+            // R3 labels: deferred like BUZZ ME (R2) so the canopy,
+            // clouds and plane can never cover it; and only the
+            // nearest crate carries a tag — the farther crate's
+            // identical 13 px tag was the weakest floating text in
+            // the frame and sat half-hidden behind this canopy and
+            // the tail fin, so it is dropped, not moved.
+            pendingTags.push({ text: 'GRAB +75', x: sx, y: sy - s * 3.4, px: Math.max(13, Math.min(18, s * 0.5)), color: '#ffd166' });
           }
         } else if (c.hitT >= 0) {
           const bt = (state.time - c.hitT) / 0.8;
