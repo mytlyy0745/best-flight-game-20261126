@@ -136,11 +136,11 @@ export function stageShot(name, world) {
     return { screen: SCREEN_PLAY, best: world.state.score };
   }
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const r = flyUntil(world, (s, e) => (e & EVENT_LANDED) !== 0 || s.z >= 6180, 240);
+    const r = flyUntil(world, (s, e) => (e & EVENT_LANDED) !== 0 || s.z >= 6280, 240);
     if ((r.events & EVENT_LANDED) !== 0) {
       return { screen: SCREEN_WIN, best: world.state.score };
     }
-    if (world.state.z >= 6180) {
+    if (world.state.z >= 6280) {
       return { screen: SCREEN_PLAY, best: world.state.score };
     }
     if (world.state.over) world.retryMission(world.state.mission);

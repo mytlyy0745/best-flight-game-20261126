@@ -548,16 +548,16 @@ export function createRenderer(canvas, effects) {
       const d = (camDepth * altAbove) / Math.max(20, sy - horizonY);
       rx = clamp((camDepth * 10) / d, 26, 120);
       alpha = clamp(0.55 - altAbove * 0.0022, 0.12, 0.5);
+      alpha = Math.min(alpha, 0.26 + Math.max(0, altAbove - 60) * 0.002);
       sx = w / 2 - clamp(altAbove * 0.35, 0, 90);
     }
-    ctx.fillStyle = `rgba(20,26,18,${(alpha * 0.45).toFixed(3)})`;
-    ctx.beginPath();
-    ctx.ellipse(sx, sy, rx * 1.45, rx * 0.38, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = `rgba(20,26,18,${alpha.toFixed(3)})`;
-    ctx.beginPath();
-    ctx.ellipse(sx, sy, rx, rx * 0.26, 0, 0, Math.PI * 2);
-    ctx.fill();
+    const layers = [[1.55, 0.22], [1.3, 0.45], [1.12, 0.7], [1, 1]];
+    for (const [scale, frac] of layers) {
+      ctx.fillStyle = `rgba(20,26,18,${(alpha * frac).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, rx * scale, rx * 0.26 * scale, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   function draw(state, world, screen, best) {
@@ -694,69 +694,45 @@ export function createRenderer(canvas, effects) {
             const sx = w / 2 + (camDepth * (wx - camX)) / d;
             const sw = Math.max(1.5, (camDepth * 40) / d);
             if (sx + sw < -20 || sx - sw > w + 20) continue;
-            ctx.fillStyle = mix3([124, 164, 102], SKY_HORIZON, haze * 0.7);
+            ctx.fillStyle = mix3([110, 146, 90], SKY_HORIZON, haze * 0.7);
             ctx.fillRect(sx - sw / 2, topY, sw, bandH);
-          }
-        }
-        if (onRunway && !crossRoad && bandH > 60) {
-          const visH = Math.min(bandH, h - topY);
-          const split = topY + visH * (0.45 + hash(i * 71 + 3) * 0.15);
-          ctx.fillStyle = mix3([70, 110, 60], SKY_HORIZON, haze * 0.7);
-          ctx.fillRect(-40, split, w + 80, Math.max(1, visH * 0.05));
-          ctx.fillStyle = mix3([88, 119, 73], SKY_HORIZON, haze * 0.7);
-          ctx.fillRect(-40, split, w + 80, topY + bandH - split);
-          const split2 = topY + visH * (0.72 + hash(i * 83 + 5) * 0.1);
-          ctx.fillStyle = mix3([70, 110, 60], SKY_HORIZON, haze * 0.7);
-          ctx.fillRect(-40, split2, w + 80, Math.max(1, visH * 0.04));
-          ctx.fillStyle = mix3([80, 108, 66], SKY_HORIZON, haze * 0.7);
-          ctx.fillRect(-40, split2, w + 80, topY + bandH - split2);
-          const gspeckCount = Math.min(12, Math.floor(visH / 35));
-          ctx.fillStyle = 'rgba(52,96,52,0.16)';
-          for (let k = 0; k < gspeckCount; k += 1) {
-            const gx = hash(i * 113 + k * 41 + 7) * w;
-            const gw = w * (0.02 + hash(i * 79 + k * 13) * 0.05);
-            ctx.fillRect(gx, topY + visH * ((k + 0.3) / gspeckCount), gw, Math.max(2, visH * 0.03));
           }
         }
         if (onRunway) {
           const cx = w / 2 - (camDepth * camX) / d;
           const half = (camDepth * RUNWAY.halfWidth) / d;
-          ctx.fillStyle = mix3([88, 88, 96], [150, 158, 170], haze * 0.25);
+          const asphaltBase = dusk ? [102, 92, 86] : [88, 88, 96];
+          const asphaltHaze = dusk ? [168, 152, 140] : [150, 158, 170];
+          ctx.fillStyle = mix3(asphaltBase, asphaltHaze, haze * 0.25);
           ctx.fillRect(cx - half, topY, half * 2, bandH);
           if (bandH > 8) {
             const visH = Math.max(0, Math.min(bandH, h - topY));
             const stripL = Math.max(cx - half, -20);
             const stripR = Math.min(cx + half, w + 20);
             const stripW = Math.max(1, stripR - stripL);
-            const aggCount = Math.min(30, 5 + Math.floor(visH / 22) + Math.floor(stripW / 130));
-            ctx.fillStyle = 'rgba(52,52,60,0.4)';
-            for (let k = 0; k < aggCount; k += 1) {
-              const ax = stripL + hash(i * 97 + k * 19) * stripW;
-              const aw = Math.min(80, Math.max(8, half * 0.09 * (0.5 + hash(i * 97 + k * 19 + 7))));
-              const ah = Math.min(12, Math.max(2.5, visH * 0.05 * (0.6 + hash(i * 97 + k * 19 + 11))));
-              const ay = topY + visH * ((k + 0.5 + (hash(i * 97 + k * 19 + 13) - 0.5) * 0.7) / aggCount);
-              ctx.fillRect(ax, ay, aw, ah);
+            for (let k = 0; k < 4; k += 1) {
+              const sx = stripL + hash(i * 97 + k * 19) * stripW;
+              const sw = Math.max(1.5, (camDepth * (0.8 + hash(i * 97 + k * 19 + 7) * 1.4)) / d);
+              ctx.fillStyle = `rgba(46,42,44,${(0.05 + hash(i * 97 + k * 19 + 11) * 0.05).toFixed(3)})`;
+              ctx.fillRect(sx - sw / 2, topY, sw, bandH);
             }
-            const paleCount = Math.min(12, 3 + Math.floor(visH / 40));
-            ctx.fillStyle = 'rgba(210,214,222,0.16)';
-            for (let k = 0; k < paleCount; k += 1) {
-              const px = stripL + hash(i * 89 + k * 23 + 3) * stripW;
-              const pw = Math.min(70, Math.max(8, half * 0.08 * (0.5 + hash(i * 89 + k * 23 + 5))));
-              const ph2 = Math.min(10, Math.max(2.5, visH * 0.04 * (0.6 + hash(i * 89 + k * 23 + 9))));
-              const py = topY + visH * ((k + 0.3 + (hash(i * 89 + k * 23 + 15) - 0.5) * 0.7) / paleCount);
-              ctx.fillRect(px, py, pw, ph2);
+            for (let k = 0; k < 2; k += 1) {
+              const sx = stripL + hash(i * 89 + k * 23 + 3) * stripW;
+              const sw = Math.max(1.5, (camDepth * (1.2 + hash(i * 89 + k * 23 + 5) * 1.6)) / d);
+              ctx.fillStyle = `rgba(224,212,196,${(0.04 + hash(i * 89 + k * 23 + 9) * 0.03).toFixed(3)})`;
+              ctx.fillRect(sx - sw / 2, topY, sw, bandH);
             }
           }
           for (const side of [-1, 1]) {
             const tx = cx + side * ((camDepth * 6) / d);
             const tw = Math.min(10, Math.max(1.5, (camDepth * 2.2) / d));
-            ctx.fillStyle = 'rgba(52,52,60,0.5)';
+            ctx.fillStyle = 'rgba(52,52,60,0.32)';
             ctx.fillRect(tx - tw / 2, topY, tw, bandH);
           }
           const zm = z - SEG_LEN / 2;
-          if ((((zm % 50) + 50) % 50) < 20) {
+          if ((((zm % 50) + 50) % 50) < 30 || d < 140) {
             ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-            ctx.lineWidth = Math.min(4, Math.max(1, half * 0.08));
+            ctx.lineWidth = Math.min(5, Math.max(1, half * 0.08));
             ctx.beginPath();
             ctx.moveTo(cx, y);
             ctx.lineTo(cx, prevY);
@@ -770,21 +746,14 @@ export function createRenderer(canvas, effects) {
           ctx.moveTo(cx + half, y);
           ctx.lineTo(cx + half, prevY);
           ctx.stroke();
-          const jointY = topY + bandH / 2;
-          ctx.strokeStyle = 'rgba(40,40,48,0.3)';
-          ctx.lineWidth = Math.max(1, Math.min(3, half * 0.02));
-          ctx.beginPath();
-          ctx.moveTo(cx - half, jointY);
-          ctx.lineTo(cx + half, jointY);
-          ctx.stroke();
-          if (bandH > 20) {
-            for (let k = 0; k < 2; k += 1) {
-              const rx2 = cx - half + hash(i * 83 + k * 29) * half * 2;
-              const rw2 = Math.min(180, half * (0.2 + hash(i * 37 + k * 13) * 0.3));
-              const ph = Math.min(bandH * 0.25, 60);
-              ctx.fillStyle = 'rgba(60,60,70,0.18)';
-              ctx.fillRect(rx2, topY + bandH * (0.2 + k * 0.4), rw2, ph);
-            }
+          if (d > 140) {
+            const jointY = topY + bandH / 2;
+            ctx.strokeStyle = 'rgba(40,40,48,0.3)';
+            ctx.lineWidth = Math.max(1, Math.min(3, half * 0.02));
+            ctx.beginPath();
+            ctx.moveTo(cx - half, jointY);
+            ctx.lineTo(cx + half, jointY);
+            ctx.stroke();
           }
           if (z - RUNWAY.z0 < 60) {
             ctx.fillStyle = 'rgba(255,255,255,0.85)';
@@ -795,16 +764,16 @@ export function createRenderer(canvas, effects) {
               ctx.fillRect(bx0, topY, bw, bandH);
             }
           }
-          if (d > 50) {
+          if (d > 15) {
             for (const bar of [
-              { z: RUNWAY.z0 + 150, w: 5, off: 8 },
-              { z: RUNWAY.z0 + 300, w: 7, off: 9 },
-              { z: RUNWAY.z0 + 450, w: 5, off: 8 },
+              { z: RUNWAY.z0 + 150, w: 7, off: 8 },
+              { z: RUNWAY.z0 + 300, w: 9, off: 9 },
+              { z: RUNWAY.z0 + 450, w: 7, off: 8 },
             ]) {
-              if (Math.abs(zm - bar.z) <= 13) {
+              if (Math.abs(zm - bar.z) <= 16) {
                 const bw = Math.min(24, Math.max(2, (camDepth * bar.w) / d));
                 const bo = Math.min(90, (camDepth * bar.off) / d);
-                ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                ctx.fillStyle = 'rgba(255,255,255,0.9)';
                 ctx.fillRect(cx - bo - bw, topY, bw, bandH);
                 ctx.fillRect(cx + bo, topY, bw, bandH);
               }
