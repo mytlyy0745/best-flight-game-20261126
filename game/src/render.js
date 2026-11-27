@@ -56,11 +56,11 @@ export function createRenderer(canvas, effects) {
   }
 
   function drawSky(w, h, horizonY, time, dusk) {
-    const top = dusk ? [58, 66, 138] : SKY_TOP;
-    const horizon = dusk ? [255, 166, 88] : SKY_HORIZON;
+    const top = dusk ? [46, 50, 122] : SKY_TOP;
+    const horizon = dusk ? [255, 150, 66] : SKY_HORIZON;
     const g = ctx.createLinearGradient(0, 0, 0, h);
     g.addColorStop(0, `rgb(${top[0]},${top[1]},${top[2]})`);
-    g.addColorStop(0.55, dusk ? `rgb(122,110,168)` : `rgb(120,164,205)`);
+    g.addColorStop(0.55, dusk ? `rgb(140,96,160)` : `rgb(96,150,206)`);
     g.addColorStop(0.72, `rgb(${horizon[0]},${horizon[1]},${horizon[2]})`);
     g.addColorStop(0.73, dusk ? `rgb(150,130,120)` : `rgb(140,170,150)`);
     g.addColorStop(1, dusk ? `rgb(96,84,80)` : `rgb(90,120,80)`);
@@ -68,12 +68,12 @@ export function createRenderer(canvas, effects) {
     ctx.fillRect(0, 0, w, h);
     const sx = w * 0.78;
     const sy = horizonY - h * (dusk ? 0.09 : 0.22);
-    const glow = ctx.createRadialGradient(sx, sy, 4, sx, sy, dusk ? 155 : 145);
+    const glow = ctx.createRadialGradient(sx, sy, 4, sx, sy, dusk ? 185 : 175);
     glow.addColorStop(0, dusk ? 'rgba(255,214,150,0.95)' : 'rgba(255,244,200,0.95)');
-    glow.addColorStop(0.25, dusk ? 'rgba(255,170,90,0.68)' : 'rgba(255,220,140,0.65)');
+    glow.addColorStop(0.25, dusk ? 'rgba(255,170,90,0.78)' : 'rgba(255,220,140,0.72)');
     glow.addColorStop(1, dusk ? 'rgba(255,170,90,0)' : 'rgba(255,220,140,0)');
     ctx.fillStyle = glow;
-    ctx.fillRect(sx - 160, sy - 160, 320, 320);
+    ctx.fillRect(sx - 190, sy - 190, 380, 380);
     const disc = ctx.createRadialGradient(sx, sy, 2, sx, sy, dusk ? 28 : 26);
     disc.addColorStop(0, '#fffdf2');
     disc.addColorStop(0.7, dusk ? '#ffe0a8' : '#fff6d8');
@@ -82,6 +82,12 @@ export function createRenderer(canvas, effects) {
     ctx.beginPath();
     ctx.arc(sx, sy, dusk ? 28 : 26, 0, Math.PI * 2);
     ctx.fill();
+    const hb = ctx.createLinearGradient(0, horizonY - 54, 0, horizonY + 8);
+    hb.addColorStop(0, 'rgba(255,170,90,0)');
+    hb.addColorStop(0.55, dusk ? 'rgba(255,148,64,0.55)' : 'rgba(255,212,140,0.34)');
+    hb.addColorStop(1, 'rgba(255,170,90,0)');
+    ctx.fillStyle = hb;
+    ctx.fillRect(0, horizonY - 54, w, 62);
     if (dusk) {
       for (let k = 0; k < 48; k += 1) {
         const sx2 = hash(k * 13 + 1) * w;
