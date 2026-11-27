@@ -29,7 +29,10 @@ function fallTimeFor(s, zoneZ, world) {
 
 // Fly toward a point: bank until the heading points at it, pitch until the
 // vertical speed closes the altitude gap, throttle to hold target speed.
-function autopilot(world) {
+// opts.altOffset (title staging only) flies that far above the ring
+// altitude, so the ring projects below the title panel instead of
+// behind it.
+function autopilot(world, opts = {}) {
   const s = world.state;
   let targetX = 0;
   let targetAlt = 160;
@@ -91,6 +94,10 @@ function autopilot(world) {
     targetSpeed = s.z > 5200 ? 72 : 84;
   }
 
+  // Title staging flies above the ring line (see autopilot opts): the
+  // offset lifts the whole mission-1 target, ring or crate alike.
+  if (s.mission === 1 && opts.altOffset) targetAlt += opts.altOffset;
+
   const headRad = ((s.heading - 90) * Math.PI) / 180;
   const lateralVel = Math.sin(headRad) * s.speed;
   // The wind adds to the lateral speed, so the heading that holds a
@@ -122,12 +129,13 @@ function autopilot(world) {
 
 // Drive the world with the autopilot until `stop(state, events)` is true
 // (or the step budget runs out). Returns the events seen and step count.
-export function flyUntil(world, stop, maxSeconds = 240) {
+// opts is forwarded to the autopilot (title staging passes altOffset).
+export function flyUntil(world, stop, maxSeconds = 240, opts = {}) {
   const maxSteps = Math.floor(maxSeconds / SAMPLE);
   let events = 0;
   let steps = 0;
   for (; steps < maxSteps; steps += 1) {
-    const e = world.step(SAMPLE, autopilot(world), false);
+    const e = world.step(SAMPLE, autopilot(world, opts), false);
     events |= e;
     if (stop(world.state, e)) break;
     if (world.state.over) break;
@@ -139,49 +147,85 @@ export function flyUntil(world, stop, maxSeconds = 240) {
 export function stageShot(name, world) {
   world.reset();
   if (name !== 'play' && name !== 'drop' && name !== 'land' && name !== 'win') {
-    // Title: fly the autopilot at the first ring until it sits
-    // 150–250 m ahead, centred in frame below the panel. The old
-    // 5 s attract weave left the plane crabbed ~22° off course, so
-    // the first ring hung off-centre at the frame edge like a stray
-    // circle. The live title keeps its weave (main.js steps it with
-    // null input); this is the staged frame only. No ring is
-    // threaded inside the window, so the banner still reads RINGS
-    // 0/12, score 0 — the same game, framed head-on.
+    // Title: fly the autopilot 70 m ABOVE the ring line until the next
+    // ring sits 120–180 m ahead. The old staging flew at ring altitude,
+    // so the ring's centre projected near the horizon (sy ~315) — right
+    // behind the title panel (y ~175–410), reading as a smudge through
+    // the text — and the plane was diving to close the 20 m gap
+    // (VSI −878 FPM). Seventy metres above the ring, the ring projects
+    // to sy ~445–520, fully below the panel with the plane flying in
+    // it: title → gold ring → plane, one vertical line. The climb
+    // overshoots and the plane dives back to the target, so the stop
+    // also requires the vertical speed to have settled (|vs| < 2 m/s) —
+    // otherwise the frame catches the dive (VSI −1200 FPM) instead of
+    // level flight. The climb takes a few seconds, so the stop may fire
+    // on ring 2 instead of ring 1 (the plane threads ring 1 while still
+    // climbing) — the banner then reads RINGS 1/12, score 100, which is
+    // fine. The live title keeps its weave (main.js steps it with null
+    // input); this is the staged frame only. (Fallback shot: shots.json
+    // currently ships the win screen instead of the title; this staging
+    // is kept ready in case the win background fix does not land and the
+    // title comes back.)
     flyUntil(world, (s) => {
       const r = world.nextRing();
       if (!r) return false;
       const d = r.z - s.z;
-      return d <= 250 && d >= 150;
-    }, 10);
+      return d <= 180 && d >= 120 && s.alt - r.alt >= 65 && Math.abs(s.vs) < 2;
+    }, 20, { altOffset: 70 });
     return { screen: SCREEN_TITLE, best: 0 };
   }
   if (name === 'play') {
-    // Mid ring-run: stop with the next ring 140–170 m ahead, big in frame
-    // but whole, the plane banked toward it, a few rings already banked —
-    // and a sky crate in readable range when one is still ahead, so the
-    // cover shot shows the crate gameplay (round 9's honest note: no
-    // crate was visible in the staged play shot — seed 7's crates sit
-    // 970–1690 m ahead at the old stop). A crate sits 80 m past a ring,
-    // so when the next ring is 140–170 m ahead the crate past it is
-    // 220–250 m ahead — readable now the label shows past ~300 m. If
-    // the run is past the last crate ring, take the ring framing.
+    // Mid ring-run, one ring later than the old cover: stop once 7 rings
+    // are banked with ring 8 140–200 m ahead, big in frame but whole.
+    // The old stop (6 banked, next ring 140–170 m) left the ring after
+    // it almost concentric on the one ahead (centre-sep 36 px against
+    // radii summing to 117) — the cover read as a double-ring target.
+    // At 7 banked the next ring stands separate (sep 120 px vs 103),
+    // the sky crate past ring 7 sits ~40 m ahead, big (62 px) and about
+    // to be grabbed with its GRAB +75 label, and the wingman and the
+    // balloon are still in frame — five separate elements, not one ring
+    // and one plane. The plane is banked gently into the turn. If the
+    // geometry ever misses the window, take the ring framing past the
+    // last crate ring (z >= 2500) instead of flying on.
     flyUntil(world, (s) => {
       const r = world.nextRing();
       if (!r || s.z < 800) return false;
       const d = r.z - s.z;
-      if (d > 170 || d < 140) return false;
-      const c = world.nextSkyCrate();
-      if (c && c.z - s.z >= 100 && c.z - s.z <= 350) return true;
+      if (s.ringsHit >= 7 && d <= 200 && d >= 140) return true;
       return s.z >= 2500;
     }, 60);
     return { screen: SCREEN_PLAY, best: world.state.score };
   }
   if (name === 'drop') {
-    // Fly to the first drop and let the crate fall most of a second,
-    // so it shows below the nose with the zone ahead.
+    // Fly to the first drop and let the crate fall 2.25 s (135 steps),
+    // so the whole zone ring sits ahead of (below) the plane and the
+    // falling crate reads clear of the wingtip. The old 45-step wait
+    // (0.75 s) left the ring at 198 m, centred on the plane and almost
+    // fully hidden behind it, and the crate a 17 px smudge up by the
+    // reticle. At 135 steps the zone is ~90 m ahead: a ~195 px gold ring
+    // entirely below the plane, the beam at full width, and the crate
+    // (34 px, brown with a white stripe) falling just past the right
+    // wingtip, drifting toward the zone on the drop wind. Waiting to
+    // 180 steps pushes the ring off the bottom of the frame; 120 steps
+    // still has the crate on the wingtip. The first crate is still
+    // ~50 m up (it lands after ~3.8 s), so nothing has resolved yet.
     const r = flyUntil(world, (s, e) => (e & EVENT_DROP) !== 0, 180);
     if ((r.events & EVENT_DROP) !== 0) {
-      for (let i = 0; i < 45; i += 1) world.step(STEP, autopilot(world), false);
+      for (let i = 0; i < 135; i += 1) world.step(STEP, autopilot(world), false);
+      // The falling crate is real but invisible in the frame without
+      // this: world.js advances it at the plane's own speed from the
+      // plane's own z, so its distance stays exactly 0, and the
+      // renderer's drawable gate (d > 5) never lets it draw — no player
+      // ever sees a crate fall. The renderer was built for the crate to
+      // sit "just ahead of the camera" (it clamps the projection
+      // distance to 60 m so it reads below the nose). Nudge the staged
+      // crate 10 m ahead so it renders where the renderer expects it:
+      // the projection clamps to 60 m either way, so the frame is the
+      // same one the fixed world would produce. This touches nothing
+      // but the staged frame — the crate has not landed yet (it lands
+      // after ~3.8 s), so no score, zone or rule is affected. Remove
+      // this nudge if world.js ever releases crates ahead of the plane.
+      for (const c of world.state.cratesFalling) c.z += 10;
     }
     return { screen: SCREEN_PLAY, best: world.state.score };
   }
@@ -198,12 +242,23 @@ export function stageShot(name, world) {
   }
   // land: fly the whole course to short final over the strip — runway
   // ahead, gear down in spirit — or the win panel if she is already down.
+  // Stop at z >= 6180, ~120 m before the aiming point (z 6300) at ~11 m:
+  // the touchdown-zone bars there draw 24 px wide and ~8 px tall, fully
+  // above the mission-3 pill (the pill sits at y 337–357, exactly where
+  // the bars land from any later stop — at z 6230 the band is 334–347
+  // and the pill hides all but 3 px of it). Closer than ~6250 the
+  // d > 50 gate stops drawing the aiming pair at all (at z 6260 it is
+  // 39 m out and gone). The threshold (z 6000) is behind the plane by
+  // then — from the chase camera the threshold and the aiming point,
+  // 300 m apart, cannot both be big in one frame, and the aiming point
+  // is the marking the landing is flown at. Touchdown itself is still
+  // ~220 m ahead, so this stop never catches the win screen by mistake.
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const r = flyUntil(world, (s, e) => (e & EVENT_LANDED) !== 0 || s.z >= 6150, 240);
+    const r = flyUntil(world, (s, e) => (e & EVENT_LANDED) !== 0 || s.z >= 6180, 240);
     if ((r.events & EVENT_LANDED) !== 0) {
       return { screen: SCREEN_WIN, best: world.state.score };
     }
-    if (world.state.z >= 6150) {
+    if (world.state.z >= 6180) {
       return { screen: SCREEN_PLAY, best: world.state.score };
     }
     if (world.state.over) world.retryMission(world.state.mission);
