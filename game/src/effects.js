@@ -11,7 +11,7 @@ const EVENT_CRATE = 1024;
 const MAX_PARTICLES = 500;
 const TRAIL_POINTS = 11; // contrail samples streaming off each wingtip
 const RING_SPARKLES = 9; // sparkles orbiting each near ring
-const RAIN_DROPS = 95; // rain streaks in the storm landing
+const RAIN_DROPS = 65; // rain streaks in the storm landing
 const MOTES = 42; // golden airborne motes drifting in the daylight
 const BURST_LIFE = 0.9; // seconds a ring/crate burst stays visible
 
@@ -338,7 +338,7 @@ export function createEffects(seed) {
       for (let i = 0; i < 7; i += 1) {
         const fx = w * (FWX[i] + (hash(i * 7 + 3) - 0.5) * 0.06);
         const fy = h * (FWY[i] + (hash(i * 11 + 5) - 0.5) * 0.04);
-        const B = i < 2 ? 1.5 : 1;
+        const B = i === 0 ? 1.8 : i < 2 ? 1.5 : 1;
         const cycle = (time * 0.4 + i * 0.31) % 1;
         if (cycle >= 0.8) continue;
         const alpha = 1 - cycle / 0.8;
@@ -353,11 +353,11 @@ export function createEffects(seed) {
           ctx.restore();
         }
         const glow = ctx.createRadialGradient(fx, fy, 1, fx, fy, (34 + cycle * 56) * B);
-        glow.addColorStop(0, col);
+        glow.addColorStop(0, i === 0 ? '#fff7d6' : col);
         glow.addColorStop(0.4, col);
         glow.addColorStop(1, 'rgba(255,255,255,0)');
         ctx.save();
-        ctx.globalAlpha = alpha * 0.5 * B;
+        ctx.globalAlpha = alpha * (i === 0 ? 0.65 : 0.5) * B;
         ctx.fillStyle = glow;
         ctx.fillRect(fx - 95 * B, fy - 95 * B, 190 * B, 190 * B);
         ctx.restore();
@@ -390,7 +390,7 @@ export function createEffects(seed) {
           const a = hash(i * 23 + k * 7) * Math.PI * 2;
           const r = (14 + cycle * 78) * B * (0.8 + hash(i * 31 + k) * 0.4);
           ctx.beginPath();
-          ctx.arc(fx + Math.cos(a) * r, fy + Math.sin(a) * r + cycle * cycle * 34, 1.3, 0, Math.PI * 2);
+          ctx.arc(fx + Math.cos(a) * r, fy + Math.sin(a) * r + cycle * cycle * 34, i === 0 ? 1.9 : 1.3, 0, Math.PI * 2);
           ctx.fill();
         }
         ctx.restore();
