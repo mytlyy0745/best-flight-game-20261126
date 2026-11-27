@@ -1647,8 +1647,8 @@ export function createRenderer(canvas, effects) {
     if (screen === SCREEN_WIN && state.greased) {
       const cols = ['#ffd166', '#ff5a4e', '#7dd7ff', '#7dffa8'];
       for (let i = 0; i < 4; i += 1) {
-        const fx = w * (0.26 + hash(i * 7 + 3) * 0.48);
-        const fy = h * (0.35 + hash(i * 11 + 5) * 0.42);
+        const fx = w * [0.14, 0.86, 0.3, 0.7][i];
+        const fy = h * [0.62, 0.62, 0.74, 0.74][i];
         const cycle = (animT * 0.4 + i * 0.37) % 1;
         const fr = 8 + cycle * 46;
         const fa = cycle < 0.7 ? 0.9 * (1 - cycle / 0.7) : 0;
@@ -1715,7 +1715,7 @@ export function createRenderer(canvas, effects) {
         `Landing bonus: +${state.landScore}`,
         `Best combo: x${state.maxCombo}`,
         'Press Space to fly again',
-      ], '#ffd166', -88, 34, 15, 3, 500, 0.84); // R3: 0.80 -> 0.84, less runway centreline showing through
+      ], '#ffd166', -88, 34, 15, 3, 450, 0.84); // R3: 0.80 -> 0.84, less runway centreline showing through
       const mark = 'SKY COURIER';
       ctx.save();
       ctx.font = 'bold 17px ui-monospace, Menlo, monospace';
