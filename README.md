@@ -34,7 +34,7 @@ Missions run back to back with a short brief before each. A crash retries the mi
 
 A great run clears 5000; the ceiling is around 7600.
 
-Screenshots in `screenshots/` are real renders of the game itself, staged deterministically with `?shot=start|play|drop|land&seed=7` (see `shots.json`). `main.ts` hands the game in: it copies `game/` and `screenshots/` to the output directory and writes `dossier.json` with the kit's vendored library.
+Screenshots in `screenshots/` are real renders of the game itself, staged deterministically with `?shot=play|drop|land|win&seed=7` (see `shots.json`). `main.ts` hands the game in: it copies `game/` and `screenshots/` to the output directory and writes `dossier.json` with the kit's vendored library.
 
 ---
 

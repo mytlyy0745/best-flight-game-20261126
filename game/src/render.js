@@ -41,7 +41,7 @@ function clamp(v, lo, hi) {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
-export function createRenderer(canvas) {
+export function createRenderer(canvas, effects) {
   const ctx = canvas.getContext('2d');
   // A free-running animation clock for moments when the world clock
   // stands still (the win screen): fireworks need time to bloom.
@@ -737,6 +737,7 @@ export function createRenderer(canvas) {
     const dusk = state.mission === 3 ? 1 : 0;
 
     drawSky(w, h, horizonY, state.time, dusk);
+    if (effects) effects.drawSunHalo(ctx, { w, h, horizonY, dusk }, state);
     drawMountains(w, h, horizonY, camZ, camX, 0, dusk);
     drawMountains(w, h, horizonY, camZ, camX, 1, dusk);
     drawHaze(w, horizonY);
@@ -1181,7 +1182,7 @@ export function createRenderer(canvas) {
     }
     for (const c of state.cratesFalling) {
       const d = c.z - camZ;
-      if (d > 5 && d < VIEW_DIST) drawables.push({ d, kind: 'crate', o: c });
+      if (d > -10 && d < VIEW_DIST) drawables.push({ d, kind: 'crate', o: c });
     }
     // The balloon drifts over the valley (mission 1 airspace), and the
     // bird flock crosses the track — both seeded, both alive in the frame.
@@ -1663,6 +1664,7 @@ export function createRenderer(canvas) {
     }
 
     drawClouds(w, horizonY, camZ, camX, world.clouds, camDepth);
+    if (effects) effects.drawCloudVolume(ctx, { w, h, horizonY, camDepth, camX, camZ }, state, world);
     ctx.restore();
 
     // Win screen: the runway, seen standing on it. At touchdown
@@ -1738,6 +1740,7 @@ export function createRenderer(canvas) {
         ctx.stroke();
       }
     }
+    if (effects) effects.draw(ctx, { w, h, horizonY, camDepth, camX, camAlt, camZ, pitch: state.pitch, screen, dusk }, state, world);
     drawHud(w, h, state, world, screen);
 
     // Fireworks over the field when she greases it in: seeded bursts
@@ -1766,6 +1769,9 @@ export function createRenderer(canvas) {
         ctx.restore();
       }
     }
+
+    // Enhanced win-screen fireworks (effects.js), behind the win panel.
+    if (screen === SCREEN_WIN && effects) effects.drawFireworks(ctx, w, h, animT);
 
     if (screen === SCREEN_TITLE) {
       overlay(w, h, [

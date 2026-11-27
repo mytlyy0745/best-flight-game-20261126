@@ -16,6 +16,7 @@ import { createRandom } from './random.js';
 import { createWorld, EVENT_RING, EVENT_ZONE, EVENT_LANDED, EVENT_MISSION_DONE, EVENT_DROP, EVENT_BALLOON, EVENT_ON_FIRE, EVENT_NEAR_MISS, EVENT_CRATE, EVENT_BULLSEYE } from './world.js';
 import { ACTION_CONFIRM, ACTION_PAUSE, ACTION_MUTE, createInput } from './input.js';
 import { createAudio } from './audio.js';
+import { createEffects } from './effects.js';
 import { createRenderer, SCREEN_TITLE, SCREEN_BRIEF, SCREEN_PLAY, SCREEN_PAUSED, SCREEN_FAIL, SCREEN_MISSION_DONE, SCREEN_WIN } from './render.js';
 import { stageShot } from './shots.js';
 
@@ -173,7 +174,8 @@ function boot() {
   const canvas = document.getElementById('game');
   const status = document.getElementById('status');
   const world = createWorld(createRandom(seed));
-  const renderer = createRenderer(canvas);
+  const fx = createEffects(seed);
+  const renderer = createRenderer(canvas, fx);
 
   function readBest() {
     try {
@@ -277,6 +279,7 @@ function boot() {
 
     function step() {
       const events = world.step(STEP, input.read(STEP), false);
+      fx.update(STEP, world.state, events, world);
       const bonuses = scorer.apply(world, events);
       audio.engine(world.state.throttle, screen === SCREEN_PLAY);
       if (events & EVENT_RING) audio.ring(world.state.streak);
