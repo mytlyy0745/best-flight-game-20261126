@@ -93,35 +93,45 @@ export function createRenderer(canvas, effects) {
   }
 
   function drawMountains(w, h, horizonY, camZ, camX, layer, dusk) {
-    const base = layer === 0 ? 66 : 40;
-    const amp = layer === 0 ? 34 : 22;
-    const speed = layer === 0 ? 0.05 : 0.11;
+    const base = layer === 0 ? 66 : layer === 1 ? 40 : 26;
+    const amp = layer === 0 ? 34 : layer === 1 ? 22 : 15;
+    const speed = layer === 0 ? 0.05 : layer === 1 ? 0.11 : 0.22;
     const mg = ctx.createLinearGradient(0, horizonY - 120, 0, horizonY + 2);
     const fade = (c) => `rgba(${c[0]},${c[1]},${c[2]},0)`;
-    if (dusk) {
-      if (layer === 0) {
-        mg.addColorStop(0, 'rgba(108,96,150,0.85)');
-        mg.addColorStop(0.75, 'rgba(74,64,116,0.7)');
-        mg.addColorStop(1, fade([74, 64, 116]));
-      } else {
-        mg.addColorStop(0, 'rgba(88,78,128,0.8)');
-        mg.addColorStop(0.75, 'rgba(62,54,100,0.68)');
-        mg.addColorStop(1, fade([62, 54, 100]));
-      }
-    } else if (layer === 0) {
-      mg.addColorStop(0, 'rgba(164,186,210,0.84)');
-      mg.addColorStop(0.75, 'rgba(104,130,158,0.66)');
-      mg.addColorStop(1, fade([104, 130, 158]));
-    } else {
-      mg.addColorStop(0, 'rgba(110,136,164,0.8)');
-      mg.addColorStop(0.75, 'rgba(76,102,132,0.7)');
-      mg.addColorStop(1, fade([76, 102, 132]));
-    }
+    const dayCols = [
+      [[164, 186, 210], [104, 130, 158]],
+      [[110, 136, 164], [76, 102, 132]],
+      [[86, 110, 140], [58, 82, 108]],
+    ];
+    const duskCols = [
+      [[108, 96, 150], [74, 64, 116]],
+      [[88, 78, 128], [62, 54, 100]],
+      [[70, 62, 104], [48, 42, 80]],
+    ];
+    const cols = dusk ? duskCols[layer] : dayCols[layer];
+    mg.addColorStop(0, `rgba(${cols[0][0]},${cols[0][1]},${cols[0][2]},${layer === 2 ? 0.88 : 0.84})`);
+    mg.addColorStop(0.75, `rgba(${cols[1][0]},${cols[1][1]},${cols[1][2]},${layer === 2 ? 0.75 : 0.68})`);
+    mg.addColorStop(1, fade(cols[1]));
     ctx.fillStyle = mg;
     const ridge = [];
     for (let x = 0; x <= w; x += 16) {
-      const wx = x + camZ * speed * 10 - camX * (layer === 0 ? 2 : 5);
-      const y = horizonY - base - amp * Math.abs(Math.sin(wx * 0.004) * 0.7 + Math.sin(wx * 0.011 + 2) * 0.5) - amp * 0.4 * Math.sin(wx * 0.027 + 1) - amp * 0.18 * Math.sin(wx * 0.055 + 4);
+      const wx = x + camZ * speed * 10 - camX * (layer === 0 ? 2 : layer === 1 ? 5 : 9);
+      let r = 0;
+      r += 0.5 * Math.pow(0.5 + 0.5 * Math.sin(wx * 0.004 + layer * 1.7), 1.7);
+      r += 0.3 * Math.pow(0.5 + 0.5 * Math.sin(wx * 0.011 + 2 + layer * 2.3), 1.6);
+      r += 0.28 * Math.pow(0.5 + 0.5 * Math.sin(wx * 0.027 + 1 + layer * 0.9), 1.5);
+      r += 0.16 * Math.pow(0.5 + 0.5 * Math.sin(wx * 0.061 + 3 + layer * 1.3), 1.4);
+      const q = Math.floor(wx / 46);
+      const crag = (hash(q * 17 + layer * 131) - 0.5) * 0.13 + (hash(q * 31 + layer * 57 + 5) - 0.5) * 0.08;
+      let peaks = 0;
+      for (let pk = 0; pk < 3; pk += 1) {
+        const px = (hash(layer * 7 + pk * 13 + 2) - 0.5) * 2600;
+        const pw = 70 + hash(layer * 11 + pk * 5 + 1) * 130;
+        const ph = 0.5 + hash(layer * 3 + pk * 19 + 4) * 0.7;
+        const dd = (wx - px) / pw;
+        peaks += ph * Math.exp(-dd * dd);
+      }
+      const y = horizonY - base - amp * (r + crag) - amp * 0.65 * peaks;
       ridge.push([x, y]);
     }
     ctx.beginPath();
@@ -140,29 +150,39 @@ export function createRenderer(canvas, effects) {
     }
     ctx.stroke();
     if (layer === 0) {
-      const snowLine = horizonY - 90;
-      const sg = ctx.createLinearGradient(0, horizonY - 125, 0, snowLine);
-      if (dusk) {
-        sg.addColorStop(0, 'rgba(255,214,170,0.95)');
-        sg.addColorStop(0.65, 'rgba(255,196,150,0.85)');
-        sg.addColorStop(1, 'rgba(255,190,140,0)');
-      } else {
-        sg.addColorStop(0, 'rgba(255,255,255,0.95)');
-        sg.addColorStop(0.65, 'rgba(255,255,255,0.85)');
-        sg.addColorStop(1, 'rgba(255,255,255,0)');
+      const snowLine = horizonY - 88;
+      const snowTop = dusk ? 'rgba(255,214,170,0.95)' : 'rgba(255,255,255,0.95)';
+      const snowLow = dusk ? 'rgba(255,196,150,0.55)' : 'rgba(238,244,252,0.6)';
+      for (let k = 3; k < ridge.length - 3; k += 1) {
+        const y0 = ridge[k][1];
+        if (y0 > snowLine - 2) continue;
+        if (y0 > ridge[k - 1][1] || y0 > ridge[k + 1][1] || y0 > ridge[k - 2][1] || y0 > ridge[k + 2][1]) continue;
+        if (y0 > ridge[k - 3][1] - 4 || y0 > ridge[k + 3][1] - 4) continue;
+        const depth = 7 + hash(k * 7 + layer) * 11;
+        const g2 = ctx.createLinearGradient(0, y0 - 2, 0, y0 + depth);
+        g2.addColorStop(0, snowTop);
+        g2.addColorStop(1, snowLow);
+        ctx.fillStyle = g2;
+        ctx.beginPath();
+        ctx.moveTo(ridge[k - 2][0], ridge[k - 2][1]);
+        for (let j = k - 2; j <= k + 2; j += 1) ctx.lineTo(ridge[j][0], ridge[j][1]);
+        for (let j = k + 2; j >= k - 2; j -= 1) {
+          const taper = Math.max(0, 1 - Math.abs(j - k) / 2.2);
+          const dip = depth * taper * (0.45 + hash(k * 13 + j * 5) * 0.55);
+          ctx.lineTo(ridge[j][0], ridge[j][1] + dip);
+        }
+        ctx.closePath();
+        ctx.fill();
+        if (hash(k * 3 + 1) < 0.6) {
+          ctx.strokeStyle = snowLow;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          const sx0 = ridge[k][0] + (hash(k * 5) - 0.5) * 20;
+          ctx.moveTo(sx0, y0 + depth * 0.5);
+          ctx.lineTo(sx0 + (hash(k * 9) - 0.5) * 10, y0 + depth + 8 + hash(k * 11) * 10);
+          ctx.stroke();
+        }
       }
-      ctx.fillStyle = sg;
-      ctx.beginPath();
-      let started = false;
-      for (const [x, y] of ridge) {
-        const sy = Math.min(y, snowLine);
-        if (!started) { ctx.moveTo(x, sy); started = true; }
-        else ctx.lineTo(x, sy);
-      }
-      ctx.lineTo(w, snowLine);
-      ctx.lineTo(0, snowLine);
-      ctx.closePath();
-      ctx.fill();
     }
   }
 
@@ -582,6 +602,7 @@ export function createRenderer(canvas, effects) {
     if (effects) effects.drawSunHalo(ctx, { w, h, horizonY, dusk }, state);
     drawMountains(w, h, horizonY, camZ, camX, 0, dusk);
     drawMountains(w, h, horizonY, camZ, camX, 1, dusk);
+    drawMountains(w, h, horizonY, camZ, camX, 2, dusk);
     drawHaze(w, horizonY);
 
     ctx.save();
@@ -609,8 +630,28 @@ export function createRenderer(canvas, effects) {
         const field = [Math.round(lerp(rawField[0], 118, 0.35)), Math.round(lerp(rawField[1], 138, 0.35)), Math.round(lerp(rawField[2], 88, 0.35))];
         const col = onRunway ? [104, 140, 86] : crossRoad ? ROAD_COL : field;
         const baseFill = mix3(col, SKY_HORIZON, haze * 0.7);
-        ctx.fillStyle = baseFill;
-        ctx.fillRect(-40, topY, w + 80, bandH);
+        if (onRunway || crossRoad) {
+          ctx.fillStyle = baseFill;
+          ctx.fillRect(-40, topY, w + 80, bandH);
+        } else {
+          const edges = [0, 0.13, 0.27, 0.44, 0.58, 0.74, 0.88, 1.0];
+          let prevEdge = -40;
+          for (let p = 0; p < edges.length - 1; p += 1) {
+            const jit = (hash(seg * 17 + p * 29 + 3) - 0.5) * 0.09;
+            const ex = clamp(edges[p + 1] + jit, 0.02, 0.99) * w;
+            const praw2 = FIELDS[Math.floor(hash(Math.floor((seg + p * 3) / 3) * 7 + p * 13) * FIELDS.length)];
+            const pfield = [Math.round(lerp(praw2[0], 118, 0.35)), Math.round(lerp(praw2[1], 138, 0.35)), Math.round(lerp(praw2[2], 88, 0.35))];
+            ctx.fillStyle = mix3(pfield, SKY_HORIZON, haze * 0.7);
+            ctx.fillRect(prevEdge, topY, ex - prevEdge + 1, bandH);
+            if (bandH > 3 && p < edges.length - 2) {
+              ctx.fillStyle = mix3([42, 82, 46], SKY_HORIZON, haze * 0.7);
+              ctx.fillRect(ex - 1, topY, Math.max(1, Math.min(3, bandH * 0.08)), bandH);
+            }
+            prevEdge = ex;
+          }
+          ctx.fillStyle = mix3(field, SKY_HORIZON, haze * 0.7);
+          ctx.fillRect(prevEdge, topY, w + 80 - prevEdge, bandH);
+        }
         lastBandFill = baseFill;
         lastBandBottom = Math.max(lastBandBottom, topY + bandH);
         const bg = ctx.createLinearGradient(0, topY, 0, topY + bandH);
@@ -641,8 +682,24 @@ export function createRenderer(canvas, effects) {
           const rx = w / 2 + (camDepth * (world.riverX(z) - camX)) / d;
           const rw = Math.max(2, (camDepth * 34) / d);
           if (rx + rw > -20 && rx - rw < w + 20) {
+            ctx.fillStyle = mix3([52, 96, 58], SKY_HORIZON, haze * 0.7);
+            ctx.fillRect(rx - rw / 2 - rw * 0.5, topY, rw * 0.5, bandH);
+            ctx.fillRect(rx + rw / 2, topY, rw * 0.5, bandH);
             ctx.fillStyle = mix3(RIVER_COL, SKY_HORIZON, haze * 0.7);
             ctx.fillRect(rx - rw / 2, topY, rw, bandH);
+            ctx.fillStyle = 'rgba(255,255,255,0.25)';
+            ctx.fillRect(rx - rw * 0.2, topY, Math.max(1, rw * 0.2), bandH);
+          }
+        }
+        if (!onRunway && !crossRoad && z < 5600) {
+          const tx = 190 + 55 * Math.sin(z * 0.0035 + 1.7) + 25 * Math.sin(z * 0.011 + 0.4);
+          const tsx = w / 2 + (camDepth * (tx - camX)) / d;
+          const tw = Math.max(2, (camDepth * 11) / d);
+          if (tsx + tw > -20 && tsx - tw < w + 20) {
+            ctx.fillStyle = mix3([168, 142, 96], SKY_HORIZON, haze * 0.7);
+            ctx.fillRect(tsx - tw / 2, topY, tw, bandH);
+            ctx.fillStyle = mix3([140, 116, 76], SKY_HORIZON, haze * 0.7);
+            ctx.fillRect(tsx - tw / 2, topY, Math.max(1, tw * 0.25), bandH);
           }
         }
         if (!onRunway && !crossRoad) {
@@ -665,8 +722,15 @@ export function createRenderer(canvas, effects) {
             const pw = w * (0.2 + hash(i * 19 + p * 31 + 7) * 0.25);
             const praw = PATCH_COLS[Math.floor(hash(i * 53 + p * 11 + 5) * PATCH_COLS.length)];
             const pcol = [Math.round(lerp(praw[0], field[0], 0.3)), Math.round(lerp(praw[1], field[1], 0.3)), Math.round(lerp(praw[2], field[2], 0.3))];
+            const slant = (hash(i * 59 + p * 17 + 1) - 0.5) * pw * 0.35;
             ctx.fillStyle = mix3(pcol, SKY_HORIZON, haze * 0.7);
-            ctx.fillRect(px, topY, pw, bandH);
+            ctx.beginPath();
+            ctx.moveTo(px, topY);
+            ctx.lineTo(px + pw, topY);
+            ctx.lineTo(px + pw + slant, topY + bandH);
+            ctx.lineTo(px + slant, topY + bandH);
+            ctx.closePath();
+            ctx.fill();
             if (bandH > 60) {
               const visH = Math.min(bandH, h - topY);
               const split = topY + visH * (0.4 + hash(i * 61 + p * 7) * 0.2);
@@ -678,6 +742,51 @@ export function createRenderer(canvas, effects) {
             }
             ctx.fillStyle = mix3([42, 82, 46], SKY_HORIZON, haze * 0.7);
             ctx.fillRect(px, topY, Math.max(1, bandH * 0.1), bandH);
+          }
+        }
+        if (!onRunway && !crossRoad && bandH > 26) {
+          const visH2 = Math.max(0, Math.min(bandH, h - topY));
+          const bushCount = Math.min(6, 2 + Math.floor(visH2 / 60));
+          for (let k = 0; k < bushCount; k += 1) {
+            const bx = hash(i * 131 + k * 23 + 7) * w;
+            const by = topY + visH2 * (0.25 + hash(i * 97 + k * 31 + 3) * 0.6);
+            const br = Math.max(2, visH2 * (0.05 + hash(i * 71 + k * 11) * 0.05));
+            ctx.fillStyle = mix3([46, 88, 48], SKY_HORIZON, haze * 0.7);
+            ctx.beginPath();
+            ctx.ellipse(bx, by, br * 1.3, br * 0.8, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = mix3([72, 122, 62], SKY_HORIZON, haze * 0.7);
+            ctx.beginPath();
+            ctx.ellipse(bx - br * 0.3, by - br * 0.25, br * 0.7, br * 0.45, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          const baleCount = hash(i * 151 + 9) < 0.6 ? 1 + Math.floor(hash(i * 151 + 4) * 2) : 0;
+          for (let k = 0; k < baleCount; k += 1) {
+            const hx = hash(i * 167 + k * 41 + 11) * w;
+            const hy = topY + visH2 * (0.3 + hash(i * 139 + k * 19 + 5) * 0.55);
+            const hr = Math.max(2.5, visH2 * 0.07);
+            ctx.fillStyle = mix3([196, 168, 96], SKY_HORIZON, haze * 0.7);
+            ctx.beginPath();
+            ctx.ellipse(hx, hy, hr * 1.25, hr, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = mix3([150, 122, 66], SKY_HORIZON, haze * 0.7);
+            ctx.beginPath();
+            ctx.ellipse(hx, hy - hr * 0.25, hr * 0.9, hr * 0.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.strokeStyle = mix3([52, 96, 52], SKY_HORIZON, haze * 0.7);
+          ctx.lineWidth = Math.max(1, visH2 * 0.02);
+          const tuftCount = Math.min(10, 3 + Math.floor(visH2 / 45));
+          for (let k = 0; k < tuftCount; k += 1) {
+            const tx2 = hash(i * 173 + k * 29 + 2) * w;
+            const ty2 = topY + visH2 * (0.2 + hash(i * 149 + k * 17) * 0.7);
+            const th = Math.max(2, visH2 * 0.08);
+            ctx.beginPath();
+            ctx.moveTo(tx2, ty2);
+            ctx.lineTo(tx2 - th * 0.2, ty2 - th);
+            ctx.moveTo(tx2 + th * 0.15, ty2);
+            ctx.lineTo(tx2 + th * 0.35, ty2 - th * 0.8);
+            ctx.stroke();
           }
         }
         if (!onRunway && !crossRoad) {
@@ -901,56 +1010,93 @@ export function createRenderer(canvas, effects) {
         let s = (camDepth * 9 * t.s) / d;
         s = Math.min(s, 40);
         if (s < 2 || sx < -20 || sx > w + 20) continue;
+        const tseed = Math.floor(t.z) * 7 + Math.floor(t.x) * 3;
         ctx.fillStyle = 'rgba(0,0,0,0.16)';
         ctx.beginPath();
         ctx.ellipse(sx, gy, s * 0.55, s * 0.14, 0, 0, Math.PI * 2);
         ctx.fill();
         const greens = t.round
-          ? [['#3a6b35', '#2c5a2e'], ['#4a7a3a', '#356b33'], ['#2f6030', '#274f2a']]
-          : [['#2c5a2e', '#356b33', '#3f7a3a'], ['#27512b', '#2f6030', '#3a7038']];
-        const g = greens[Math.floor(hash(Math.floor(t.z) * 7 + Math.floor(t.x)) * greens.length)];
+          ? ['#3a6b35', '#4a7a3a', '#2f6030', '#5d8f45', '#274f2a']
+          : ['#2c5a2e', '#356b33', '#3f7a3a', '#4a8542'];
+        const cg = greens[Math.floor(hash(tseed) * greens.length)];
+        const cg2 = greens[Math.floor(hash(tseed + 5) * greens.length)];
+        const cg3 = greens[Math.floor(hash(tseed + 11) * greens.length)];
         if (t.round) {
-          ctx.fillStyle = g[0];
+          const grove = hash(tseed + 23) < 0.3;
+          ctx.strokeStyle = '#4a2f1a';
+          ctx.lineWidth = Math.max(1, s * 0.14);
           ctx.beginPath();
-          ctx.ellipse(sx, gy - s * 1.45, s * 0.85, s * 0.72, 0, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = g[1];
+          ctx.moveTo(sx, gy);
+          ctx.lineTo(sx - s * 0.06, gy - s * 0.8);
+          ctx.lineTo(sx - s * 0.34, gy - s * 1.25);
+          ctx.moveTo(sx - s * 0.06, gy - s * 0.8);
+          ctx.lineTo(sx + s * 0.3, gy - s * 1.2);
+          ctx.stroke();
+          ctx.fillStyle = '#5a3a22';
+          ctx.fillRect(sx - s * 0.09, gy - s * 0.85, s * 0.18, s * 0.85);
+          const lobes = grove
+            ? [[-0.85, -1.0, 0.55], [0, -1.35, 0.8], [0.85, -1.0, 0.55], [-0.4, -1.55, 0.5], [0.45, -1.5, 0.5]]
+            : [[-0.5, -1.15, 0.62], [0.42, -1.1, 0.58], [0, -1.55, 0.72], [-0.15, -0.95, 0.5], [0.3, -1.45, 0.45]];
+          for (let k = 0; k < lobes.length; k += 1) {
+            const [lx, ly, lr] = lobes[k];
+            const jx = (hash(tseed + k * 7) - 0.5) * 0.16;
+            const jy = (hash(tseed + k * 13 + 2) - 0.5) * 0.14;
+            ctx.fillStyle = k % 3 === 0 ? cg2 : k % 3 === 1 ? cg : cg3;
+            ctx.beginPath();
+            ctx.ellipse(sx + (lx + jx) * s, gy + (ly + jy) * s, lr * s, lr * s * 0.82, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.fillStyle = 'rgba(255,255,210,0.16)';
           ctx.beginPath();
-          ctx.ellipse(sx - s * 0.45, gy - s * 1.05, s * 0.55, s * 0.45, 0, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.beginPath();
-          ctx.ellipse(sx + s * 0.42, gy - s * 1.0, s * 0.5, s * 0.42, 0, 0, Math.PI * 2);
+          ctx.ellipse(sx - s * 0.2, gy - s * 1.65, s * 0.45, s * 0.28, 0, 0, Math.PI * 2);
           ctx.fill();
           ctx.fillStyle = 'rgba(0,0,0,0.14)';
           ctx.beginPath();
-          ctx.ellipse(sx, gy - s * 1.05, s * 0.7, s * 0.3, 0, 0, Math.PI * 2);
+          ctx.ellipse(sx + s * 0.1, gy - s * 0.95, s * 0.6, s * 0.26, 0, 0, Math.PI * 2);
           ctx.fill();
-          ctx.fillStyle = '#5a3a22';
-          ctx.fillRect(sx - s * 0.12, gy - s * 0.75, s * 0.24, s * 0.75);
         } else {
-          ctx.fillStyle = g[0];
-          ctx.beginPath();
-          ctx.moveTo(sx, gy - s * 2.4);
-          ctx.lineTo(sx - s * 0.8, gy);
-          ctx.lineTo(sx + s * 0.8, gy);
-          ctx.closePath();
-          ctx.fill();
-          ctx.fillStyle = g[1];
-          ctx.beginPath();
-          ctx.moveTo(sx, gy - s * 2.4);
-          ctx.lineTo(sx - s * 0.58, gy - s * 0.8);
-          ctx.lineTo(sx + s * 0.58, gy - s * 0.8);
-          ctx.closePath();
-          ctx.fill();
-          ctx.fillStyle = g[2];
-          ctx.beginPath();
-          ctx.moveTo(sx, gy - s * 2.4);
-          ctx.lineTo(sx - s * 0.36, gy - s * 1.6);
-          ctx.lineTo(sx + s * 0.36, gy - s * 1.6);
-          ctx.closePath();
-          ctx.fill();
+          const lean = (hash(tseed + 31) - 0.5) * 0.55;
+          const apexX = sx + lean * s;
           ctx.fillStyle = '#5a3a22';
-          ctx.fillRect(sx - s * 0.1, gy - s * 0.4, s * 0.2, s * 0.4);
+          ctx.fillRect(sx - s * 0.09, gy - s * 0.45, s * 0.18, s * 0.45);
+          const tiers = [
+            [apexX, gy - s * 2.4, sx - s * 0.8, gy, sx + s * 0.8, gy, cg],
+            [apexX, gy - s * 2.4, sx - s * 0.58 + lean * s * 0.4, gy - s * 0.8, sx + s * 0.58 + lean * s * 0.4, gy - s * 0.8, cg2],
+            [apexX, gy - s * 2.4, sx - s * 0.36 + lean * s * 0.7, gy - s * 1.6, sx + s * 0.36 + lean * s * 0.7, gy - s * 1.6, cg3],
+          ];
+          for (const [ax, ay, lxx, lyy, rxx, ryy, tcol] of tiers) {
+            ctx.fillStyle = tcol;
+            ctx.beginPath();
+            ctx.moveTo(ax, ay);
+            ctx.lineTo(lxx, lyy);
+            ctx.lineTo(rxx, ryy);
+            ctx.closePath();
+            ctx.fill();
+          }
+          ctx.fillStyle = cg2;
+          for (let k = 0; k < 3; k += 1) {
+            const side = hash(tseed + k * 17 + 3) < 0.5 ? -1 : 1;
+            const by2 = gy - s * (0.7 + k * 0.55 + hash(tseed + k * 5) * 0.2);
+            const bx2 = sx + side * s * (0.55 - k * 0.12);
+            ctx.beginPath();
+            ctx.moveTo(bx2, by2);
+            ctx.lineTo(bx2 + side * s * 0.28, by2 + s * 0.12);
+            ctx.lineTo(bx2, by2 + s * 0.22);
+            ctx.closePath();
+            ctx.fill();
+          }
+          if (hash(tseed + 41) < 0.4) {
+            const px2 = sx + s * 1.15;
+            ctx.fillStyle = cg3;
+            ctx.beginPath();
+            ctx.moveTo(px2, gy - s * 1.1);
+            ctx.lineTo(px2 - s * 0.38, gy);
+            ctx.lineTo(px2 + s * 0.38, gy);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = '#5a3a22';
+            ctx.fillRect(px2 - s * 0.06, gy - s * 0.2, s * 0.12, s * 0.2);
+          }
         }
       } else if (item.kind === 'house') {
         const hs = item.o;
