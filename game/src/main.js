@@ -1,4 +1,4 @@
-import { BEST_KEY, STEP, MISSIONS, RING_PRECISION_DIST, SKY_CRATE_COUNT, SCORE_SPEED_RING, SPEED_RING_MIN, SCORE_SURGEON, SCORE_SHARPSHOOTER, SCORE_CLEAN_SWEEP, SCORE_UNTOUCHED } from './config.js';
+import { BEST_KEY, STEP, MISSIONS, RING_PRECISION_DIST, SKY_CRATE_COUNT, SCORE_SPEED_RING, SPEED_RING_MIN, SCORE_SURGEON, SCORE_SHARPSHOOTER, SURGEON_CAP, SHARPSHOOTER_CAP, SCORE_CLEAN_SWEEP, SCORE_UNTOUCHED } from './config.js';
 import { createRandom } from './random.js';
 import { createWorld, EVENT_RING, EVENT_ZONE, EVENT_LANDED, EVENT_MISSION_DONE, EVENT_DROP, EVENT_BALLOON, EVENT_ON_FIRE, EVENT_NEAR_MISS, EVENT_CRATE, EVENT_BULLSEYE } from './world.js';
 import { ACTION_CONFIRM, ACTION_PAUSE, ACTION_MUTE, createInput } from './input.js';
@@ -67,7 +67,8 @@ export function createScorer() {
         if (err < RING_PRECISION_DIST) {
           preciseStreak += 1;
           if (preciseStreak >= 2) {
-            paid.push(award(world, SCORE_SURGEON * preciseStreak, `SURGEON x${preciseStreak} +${SCORE_SURGEON * preciseStreak}`));
+            const mult = Math.min(preciseStreak, SURGEON_CAP);
+            paid.push(award(world, SCORE_SURGEON * mult, `SURGEON x${mult} +${SCORE_SURGEON * mult}`));
           }
         } else {
           preciseStreak = 0;
@@ -80,7 +81,8 @@ export function createScorer() {
     if (events & EVENT_BULLSEYE) {
       bullseyeStreak += 1;
       if (bullseyeStreak >= 2) {
-        paid.push(award(world, SCORE_SHARPSHOOTER * bullseyeStreak, `SHARPSHOOTER x${bullseyeStreak} +${SCORE_SHARPSHOOTER * bullseyeStreak}`));
+        const mult = Math.min(bullseyeStreak, SHARPSHOOTER_CAP);
+        paid.push(award(world, SCORE_SHARPSHOOTER * mult, `SHARPSHOOTER x${mult} +${SCORE_SHARPSHOOTER * mult}`));
       }
     } else if (events & EVENT_ZONE) {
       bullseyeStreak = 0;

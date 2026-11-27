@@ -11,6 +11,22 @@ export const TURN_RATE = 28; // degrees of heading per second at full bank
 export const MAX_ALT = 460; // metres above datum
 export const LATERAL_LIMIT = 320; // metres either side of the centreline
 
+// Flight model (algorithms.js): stall, ground effect, layered gusts, wind ramp.
+export const STALL_SPEED = 55; // m/s — below this the wing quits and she sinks
+export const STALL_SINK_K = 0.029; // sink = K * (STALL_SPEED - speed)^1.5, smooth to zero at stall speed
+export const GROUND_EFFECT_ALT = 8; // metres above ground where the cushion starts
+export const GROUND_EFFECT_LIFT = 0.25; // fraction of sink removed at ground level
+export const CRATE_TERMINAL_VS = 45; // m/s, fastest a falling crate ever drops
+export const CROSSWIND_RAMP_Z0 = 5000; // crosswind builds in from here, not a step
+export const CROSSWIND_RAMP_Z1 = 5600; // full crosswind from here
+export const GUST_SWELL_AMP = 1.5; // m/s, slow swell under the two fast gusts
+export const GUST_SWELL_FREQ = 0.05;
+export const RETRY_FUEL_MIN = 40; // a retry keeps what fuel she had, at least a reserve tank
+export const RING_STEP_BASE = 40; // course ramp: first legs step at most this far sideways
+export const RING_STEP_INC = 4; // ...growing each ring, capped at 70
+export const RING_ALT_STEP_BASE = 25; // first legs climb/dive at most this far
+export const RING_ALT_STEP_INC = 1.5; // ...growing each ring, capped at 35
+
 export const FUEL_START = 100;
 export const FUEL_DRAIN_BASE = 0.12;
 export const FUEL_DRAIN_THROTTLE = 0.5;
@@ -79,8 +95,38 @@ export const SCORE_SPEED_RING = 50; // ring threaded at 100+ m/s
 export const SPEED_RING_MIN = 100; // m/s at the ring crossing
 export const SCORE_SURGEON = 25; // per ring in a dead-centre streak (2nd+)
 export const SCORE_SHARPSHOOTER = 50; // per bullseye in a streak (2nd+)
+export const SURGEON_CAP = 4; // streak multipliers stop growing here — skill pays, farming does not
+export const SHARPSHOOTER_CAP = 4;
 export const SCORE_CLEAN_SWEEP = 150; // every sky crate in mission 1
 export const SCORE_UNTOUCHED = 200; // landed, no retry, no damage
+
+// Scoring ladder, cheapest to richest: every award in the game, in one table.
+export const SCORING_LADDER = [
+  { award: 'Ring', pts: 100, rule: 'thread a ring' },
+  { award: 'Ring streak', pts: 30, rule: '+30 per ring already in the streak' },
+  { award: 'Dead centre', pts: 25, rule: 'ring hit within 8 m of centre' },
+  { award: 'SURGEON', pts: 25, rule: 'per dead-centre ring in a streak of 2+, multiplier capped at x4' },
+  { award: 'FULL SEND', pts: 50, rule: 'ring threaded at 100+ m/s' },
+  { award: 'Golden ring', pts: 250, rule: 'smaller ring, 2 per flight' },
+  { award: 'ON FIRE', pts: 50, rule: '6-ring streak, or 4-zone streak — once per mission' },
+  { award: 'Sky crate', pts: 75, rule: 'grab a floating crate off the ring line' },
+  { award: 'CLEAN SWEEP', pts: 150, rule: 'all 3 sky crates in one flight' },
+  { award: 'Balloon buzz', pts: 150, rule: 'fly within 45 m of the balloon — once per flight' },
+  { award: 'Near miss', pts: 25, rule: 'within 15 m of a bird — once per flight' },
+  { award: 'Zone', pts: 250, rule: 'crate lands in a zone' },
+  { award: 'Zone streak', pts: 50, rule: '+50 per zone already in the streak' },
+  { award: 'BULLSEYE', pts: 100, rule: 'crate lands within 10 m of a zone centre' },
+  { award: 'SHARPSHOOTER', pts: 50, rule: 'per bullseye in a streak of 2+, multiplier capped at x4' },
+  { award: 'PERFECT RING RUN', pts: 300, rule: 'all 12 rings' },
+  { award: 'PERFECT DROPS', pts: 300, rule: 'all 5 zones' },
+  { award: 'BEAT THE CLOCK', pts: 200, rule: 'a mission inside its par time' },
+  { award: 'Touchdown', pts: 400, rule: 'landed on the strip' },
+  { award: 'Centreline', pts: 300, rule: 'scaled by how close to the centreline' },
+  { award: 'Smooth', pts: 200, rule: 'scaled by how gentle the descent' },
+  { award: 'Fuel left', pts: 2, rule: 'per unit of fuel left at touchdown' },
+  { award: 'GREASED', pts: 250, rule: 'gentle, centred, undamaged touchdown' },
+  { award: 'UNTOUCHED', pts: 200, rule: 'whole flight, no crash and no damage' },
+];
 
 export const LAND_MAX_VS = 7; // m/s descent at touchdown
 export const LAND_MAX_SPEED = 100; // m/s at touchdown
@@ -90,19 +136,19 @@ export const MISSIONS = [
   {
     id: 1,
     name: 'RING RUN',
-    brief: 'Fly through all 12 rings. Two are GOLDEN — smaller, worth 250. A balloon drifts over the valley: buzz it for +150. Supply crates float off the ring line: grab one for +75, all three for a CLEAN SWEEP +150 — but don\'t miss the next ring. Watch the wind — gusts push you sideways, and a wingman flies formation with you for a stretch. Throttle with Shift / Ctrl, steer with the arrow keys or WASD. Rings pay 100, streaks pay extra, dead-centre hits pay more — thread one dead centre twice in a row for a SURGEON bonus, or flat out at 100+ m/s for FULL SEND +50.',
+    brief: 'Fly through all 12 rings. Two are GOLDEN — smaller, worth 250. A balloon drifts over the valley: buzz it for +150. Supply crates float off the ring line: grab one for +75, all three for a CLEAN SWEEP +150 — but don\'t miss the next ring. Watch the wind — gusts push you sideways, and a wingman flies formation with you for a stretch. Below 55 m/s the wing quits and she sinks, so keep the speed up. Throttle with Shift / Ctrl, steer with the arrow keys or WASD. Rings pay 100, streaks pay extra, dead-centre hits pay more — thread one dead centre twice in a row for a SURGEON bonus, or flat out at 100+ m/s for FULL SEND +50.',
     goal: 'Fly through 12 rings',
   },
   {
     id: 2,
     name: 'SUPPLY DROP',
-    brief: 'Five villages need supplies. Press Space over a marked circle to drop a crate — it keeps your forward speed, so release a little early. A crosswind drifts the crates sideways: watch the DROP WIND meter and release upwind. Land one within 10 m of the centre for a BULLSEYE +100 — two bullseyes in a row pays SHARPSHOOTER. Hold B for the speed brake to slow for the release. 6 crates, 5 zones.',
+    brief: 'Five villages need supplies. Press Space over a marked circle to drop a crate — it keeps your forward speed, so release a little early, and once it leaves the bay the throttle cannot steer it. A crosswind drifts the crates sideways: watch the DROP WIND meter and release upwind. Land one within 10 m of the centre for a BULLSEYE +100 — two bullseyes in a row pays SHARPSHOOTER. Hold B for the speed brake to slow for the release. 6 crates, 5 zones.',
     goal: 'Drop crates on 5 zones',
   },
   {
     id: 3,
     name: 'STORM LANDING',
-    brief: 'Crosswind from the right. Bring her down on the runway: slow, level, gentle. Touch down under 100 m/s and under 7 m/s descent, inside the strip. Hold B for the speed brake on final. A whole flight with no crash and no damage pays UNTOUCHED +200.',
+    brief: 'Crosswind from the right — it builds in gradually past 5000 m, so crab into it early and hold the centreline. Bring her down on the runway: slow, level, gentle. Touch down under 100 m/s and under 7 m/s descent, inside the strip. The ground cushions her in the last 8 m, so a gentle flare pays. Hold B for the speed brake on final. A whole flight with no crash and no damage pays UNTOUCHED +200.',
     goal: 'Land on the runway',
   },
 ];
